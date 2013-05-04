@@ -116,7 +116,7 @@ cdef class SymmetryOperations:
       self.__refresh_c_arrays()
       if data is NULL:
           raise MemoryError()
-      self.symbol=data.international_symbol.encode("ASCII")
+      self.symbol=data.international_symbol.encode("ASCII").strip()
       self.__shift=numpy.empty((3,),dtype=numpy.float64)
       self.__transform=numpy.empty((3,3),dtype=numpy.float64)
       self.nsyms=data.n_operations
