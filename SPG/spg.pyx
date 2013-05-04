@@ -41,7 +41,6 @@ cdef class SymmetryOperations:
   cdef readonly double[:,:] __transform
   cdef readonly double[:,:,:] __rotations
   cdef readonly double[:,:] __translations
-  cdef readonly int[:,:] __correspondences
   cdef readonly double[:] __norms
   cdef double c_latvectors[3][3]
   cdef int *c_types
@@ -70,9 +69,6 @@ cdef class SymmetryOperations:
   property translations:
       def __get__(self):
           return numpy.asarray(self.__translations)
-  property correspondences:
-      def __get__(self):
-          return numpy.asarray(self.__correspondences)
 
   cdef void __build_c_arrays(self):
       """
@@ -135,40 +131,9 @@ cdef class SymmetryOperations:
                   self.__rotations[i,j,k]=data.rotations[i][j][k]
       cspglib.spg_free_dataset(data)
 
-  cdef void __build_correspondences(self) except *:
-     """
-     Build a __correspondences array such that atom i is moved to the
-     position of atom __correspondences[i,j] by symmetry operation j.
-     """
-     cdef int i,j,ip,c
-     cdef double diff,sdiff
-     cdef double[:] newpos
-     cdef bint[:] remaining
-     self.__correspondences=numpy.empty((self.natoms,self.nsyms),
-                                        dtype=numpy.int32)
-     newpos=numpy.empty((3,),dtype=numpy.float64)
-     remaining=numpy.empty((self.natoms,),dtype=numpy.int32)
-     for j in range(self.nsyms):
-         remaining[:]=True
-         for i in range(self.natoms):
-             _apply_symmetry(self.__rotations[j,:,:],self.__translations[j],
-                             self.__positions[i,:],newpos)
-             for ip in range(self.natoms):
-                 if not remaining[ip]:
-                     continue
-                 sdiff=0
-                 for c in range(3):
-                     diff=newpos[c]-self.__positions[ip,c]
-                     diff-=round(diff)
-                     sdiff=_c_max(sdiff,fabs(diff))
-                 if sdiff<self.symprec:
-                     self.__correspondences[i,j]=ip
-                     remaining[ip]=False
-                     break
-
   def __cinit__(self,lattvectors,types,positions,symprec=1e-5):
       cdef int i
-      self.__lattvectors=numpy.array(lattvectors,dtype=numpy.float64).T
+      self.__lattvectors=numpy.array(lattvectors,dtype=numpy.float64)
       self.__types=numpy.array(types,dtype=numpy.int32)
       self.__positions=numpy.array(positions,dtype=numpy.float64)
       self.__norms=numpy.empty((3,),dtype=numpy.float64)
@@ -185,7 +150,6 @@ cdef class SymmetryOperations:
       self.__build_c_arrays()
       self.__refresh_c_arrays()
       self.__spg_get_dataset()
-      self.__build_correspondences()
 
   def __dealloc__(self):
       if self.c_types is not NULL:

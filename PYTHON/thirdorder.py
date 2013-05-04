@@ -33,7 +33,7 @@ if __name__=="__main__":
             sys.exit("Usage: {} seed na nb nc".format(sys.argv[0]))
         na,nb,nc=[float(i) for i in sys.argv[2:]]
         poscar=common.read_POSCAR(".")
-        symops=spg.SymmetryOperations(poscar["lattvec"].T,poscar["types"],
+        symops=spg.SymmetryOperations(poscar["lattvec"],poscar["types"],
                                       poscar["positions"].T)
         print "Symmetry group {} detected".format(symops.symbol)
     else:
