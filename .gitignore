@@ -1,0 +1,6 @@
+arch.make
+*.pyc
+*.pyo
+*.so
+*.c
+SPG/build
