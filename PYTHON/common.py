@@ -205,12 +205,16 @@ def wedge(poscar,symops,na,nb,nc):
     tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
     calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
     calc_dist2=lambda x,y:calc_norm2(x-y)
+    pairs=numpy.empty((ntot,ntot),dtype=numpy.bool)
+    for ii,jj in itertools.product(range(ntot),range(ntot)):
+        pairs[ii,jj]=(calc_dist2(sposcar["0positions"][:,ii],
+                                 sposcar["0positions"][:,jj])
+                      <frange2)
     orth=numpy.empty(symops.rotations.shape)
     for i in range(nops):
         orth[i,:,:]=numpy.dot(scipy.linalg.solve(poscar["lattvec"].T,
                                                  symops.rotations[i,:,:].T),
                           poscar["lattvec"].T).T
-    summ=0
     BB=numpy.empty((27,27))
     coeffi=numpy.empty((6*nops*27,27))
     thelist=[]
@@ -220,112 +224,100 @@ def wedge(poscar,symops,na,nb,nc):
     nindependent=[]
     independent=[]
     transformationaux=[]
-    for ii,jj in itertools.product(range(nat),range(ntot)):
-        if (calc_dist2(sposcar["0positions"][:,ii],
-                       sposcar["0positions"][:,jj])
-            >=frange2):
+    for triplet in itertools.ifilter(
+            lambda t:pairs[t[0],t[1]] and pairs[t[0],t[2]] and pairs[t[1],t[2]],
+            itertools.product(range(nat),range(ntot),range(ntot))):
+        ii,jj,kk=triplet
+        if triplet in alllist:
             continue
-        for kk in range(ntot):
-            triplet=(ii,jj,kk)
-            summ+=1
-            if triplet in alllist:
-                continue
-            if (max(calc_dist2(sposcar["0positions"][:,ii],
-                             sposcar["0positions"][:,kk]),
-                    calc_dist2(sposcar["0positions"][:,jj],
-                              sposcar["0positions"][:,kk]))
-                >=frange2):
-                continue
-            thelist.append(copy.copy(triplet))
-            allequilist.append([])
-            transformation.append([])
-            coeffi[:,:]=0.
-            nnonzero=0
-            for (ipermutation,perm) in enumerate(
-                    itertools.permutations(range(3))):
-                pt=[triplet[i] for i in perm]
-                for isym in range(nops):
-                    triplet_sym=[equivalences[isym,pt[0]],
-                                 equivalences[isym,pt[1]],
-                                 equivalences[isym,pt[2]]]
-                    ind0=id2ind(pt[0],na,nb,nc,nat)
-                    vec0=numpy.array([ind0[i] for i in ("i","j","k")])
-                    ind1=id2ind(pt[1],na,nb,nc,nat)
-                    vec1=numpy.array([ind1[i] for i in ("i","j","k")])
-                    ind2=id2ind(pt[2],na,nb,nc,nat)
-                    vec2=numpy.array([ind2[i] for i in ("i","j","k")])
-                    if numpy.any(vec0!=0):
-                        triplet_sym[0]=ind2id(0,0,0,ind0["iat"],
-                                              na,nb,nc,nat)
-                        triplet_sym[1]=ind2id((vec1[0]-vec0[0])%na,
-                                              (vec1[1]-vec0[1])%nb,
-                                              (vec1[2]-vec0[2])%nc,
-                                              ind1["iat"],
-                                              na,nb,nc,nat)
-                        triplet_sym[1]=ind2id((vec2[0]-vec0[0])%na,
-                                              (vec2[1]-vec0[1])%nb,
-                                              (vec2[2]-vec0[2])%nc,
-                                              ind2["iat"],
-                                              na,nb,nc,nat)
-                    triplet_sym=tuple(triplet_sym)
-                    for (ibasisprime,
-                         jbasisprime,
-                         kbasisprime) in itertools.product(range(3),
-                                                           range(3),
-                                                           range(3)):
-                        indexijkprime=(3*(3*ibasisprime+jbasisprime)+
-                                       kbasisprime)
-                        indexrow=(27*(nops*ipermutation+isym)+
-                                  indexijkprime)
-                        for (ibasis,
-                             jbasis,
-                             kbasis) in itertools.product(range(3),
-                                                           range(3),
-                                                           range(3)):
-                            indexijk=3*(3*ibasis+jbasis)+kbasis
-                            (ibasispermut,jbasispermut,kbasispermut)=[
-                                (ibasis,jbasis,kbasis)[i] for i in perm]
-                            BB[indexijkprime,indexijk]=(
-                             orth[isym,ibasisprime,ibasispermut]*
-                             orth[isym,jbasisprime,jbasispermut]*
-                             orth[isym,kbasisprime,kbasispermut])
-                    if triplet_sym not in allequilist[-1] and (
-                            ipermutation==isym==0 or triplet_sym!=triplet):
-                        allequilist[-1].append(copy.copy(triplet_sym))
-                        alllist.append(copy.copy(triplet_sym))
-                        transformation[-1].append(numpy.array(BB))
-                    if triplet_sym==triplet:
-                        for indexijk in range(27):
+        thelist.append(copy.copy(triplet))
+        allequilist.append([])
+        transformation.append([])
+        coeffi[:,:]=0.
+        nnonzero=0
+        for (ipermutation,perm) in enumerate(
+                itertools.permutations(range(3))):
+            pt=[triplet[i] for i in perm]
+            for isym in range(nops):
+                triplet_sym=[equivalences[isym,pt[0]],
+                             equivalences[isym,pt[1]],
+                             equivalences[isym,pt[2]]]
+                ind0=id2ind(pt[0],na,nb,nc,nat)
+                vec0=numpy.array([ind0[i] for i in ("i","j","k")])
+                ind1=id2ind(pt[1],na,nb,nc,nat)
+                vec1=numpy.array([ind1[i] for i in ("i","j","k")])
+                ind2=id2ind(pt[2],na,nb,nc,nat)
+                vec2=numpy.array([ind2[i] for i in ("i","j","k")])
+                if numpy.any(vec0!=0):
+                    triplet_sym[0]=ind2id(0,0,0,ind0["iat"],
+                                          na,nb,nc,nat)
+                    triplet_sym[1]=ind2id((vec1[0]-vec0[0])%na,
+                                          (vec1[1]-vec0[1])%nb,
+                                          (vec1[2]-vec0[2])%nc,
+                                          ind1["iat"],
+                                          na,nb,nc,nat)
+                    triplet_sym[1]=ind2id((vec2[0]-vec0[0])%na,
+                                          (vec2[1]-vec0[1])%nb,
+                                          (vec2[2]-vec0[2])%nc,
+                                          ind2["iat"],
+                                          na,nb,nc,nat)
+                triplet_sym=tuple(triplet_sym)
+                for (ibasisprime,
+                     jbasisprime,
+                     kbasisprime) in itertools.product(range(3),
+                                                       range(3),
+                                                       range(3)):
+                    indexijkprime=(3*(3*ibasisprime+jbasisprime)+
+                                   kbasisprime)
+                    indexrow=(27*(nops*ipermutation+isym)+
+                              indexijkprime)
+                    for (ibasis,
+                         jbasis,
+                         kbasis) in itertools.product(range(3),
+                                                       range(3),
+                                                       range(3)):
+                        indexijk=3*(3*ibasis+jbasis)+kbasis
+                        (ibasispermut,jbasispermut,kbasispermut)=[
+                            (ibasis,jbasis,kbasis)[i] for i in perm]
+                        BB[indexijkprime,indexijk]=(
+                         orth[isym,ibasisprime,ibasispermut]*
+                         orth[isym,jbasisprime,jbasispermut]*
+                         orth[isym,kbasisprime,kbasispermut])
+                if triplet_sym not in allequilist[-1] and (
+                        ipermutation==isym==0 or triplet_sym!=triplet):
+                    allequilist[-1].append(copy.copy(triplet_sym))
+                    alllist.append(copy.copy(triplet_sym))
+                    transformation[-1].append(BB)
+                if triplet_sym==triplet:
+                    for indexijk in range(27):
 
-                            BB[indexijk,indexijk]-=1.
-                            if numpy.all(BB[:,indexijk]<=1e-10):
-                                continue
-                            coeffi[nnonzero,:]=BB[indexijk,:]
-                            nnonzero+=1
-            coeffi_reduced=numpy.zeros((max(nnonzero,27),27))
-            coeffi_reduced[:nnonzero,:]=coeffi[:nnonzero,:]
-            rank=numpy.linalg.matrix_rank(coeffi_reduced)
-            nindependent.append(rank)
-            if rank==0:
-                independent.append([])
-                transformationaux.append(numpy.zeros((27,0)))
-            else:
-                Q,R,P=scipy.linalg.qr(coeffi_reduced,pivoting=True)
-                iindep=P[:rank]
-                independent.append(iindep)
-                submatrix=coeffi_reduced[:,iindep]
-                b=scipy.linalg.lstsq(submatrix,coeffi_reduced)[0].T
-                transformationaux.append(b)
-            print rank,len(thelist),len(alllist),summ
-    print "{} triplets considered".format(summ)
+                        BB[indexijk,indexijk]-=1.
+                        if numpy.all(BB[:,indexijk]<=1e-10):
+                            continue
+                        coeffi[nnonzero,:]=BB[indexijk,:]
+                        nnonzero+=1
+        coeffi_reduced=numpy.zeros((max(nnonzero,27),27))
+        coeffi_reduced[:nnonzero,:]=coeffi[:nnonzero,:]
+        rank=numpy.linalg.matrix_rank(coeffi_reduced)
+        nindependent.append(rank)
+        if rank==0:
+            independent.append([])
+            transformationaux.append(numpy.zeros((27,27)))
+        else:
+            Q,R,P=scipy.linalg.qr(coeffi_reduced,pivoting=True)
+            iindep=P[:rank]
+            independent.append(iindep)
+            rematrix=numpy.zeros_like(coeffi_reduced)
+            rematrix[:,iindep]=coeffi_reduced[:,iindep]
+            b=scipy.linalg.lstsq(rematrix,coeffi_reduced)[0].T
+            transformationaux.append(b)
     print "nlist={}".format(len(thelist))
     print "nalllist={}".format(len(alllist))
-    transformation=numpy.array(transformation)
     transformationaux=numpy.array(transformationaux)
     transformationarray=numpy.zeros((27,27,nops*6,len(thelist)))
     for ii in range(len(thelist)):
         for jj in range(len(allequilist[ii])):
             transformationarray[:,:nindependent[ii],jj,ii]=numpy.dot(
-                transformation[:,:,jj,ii],
-                transformationaux[:,:nindependent[ii],ii])
+                transformation[ii][jj],
+                transformationaux[ii][:,:nindependent[ii]])
     return (thelist,allequilist,transformationarray,independent)
