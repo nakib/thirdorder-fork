@@ -167,21 +167,25 @@ def gen_equivalences(sposcar,symops,na,nb,nc):
     Return a matrix with the indices to which each atom in the
     supercell is mapped by each symmetry operation.
     """
-    references=numpy.array(sposcar["0positions"])
-    references-=numpy.round(references)
-    ntot=sposcar["0positions"].shape[1]
+    ntot=sposcar["positions"].shape[1]
+    nat=ntot//(na*nb*nc)
+    references=numpy.array(sposcar["positions"][:,:nat])
     nops=symops.translations.shape[0]
     nruter=numpy.empty((nops,ntot),dtype=numpy.int32)
     for i in range(ntot):
-        images=symmetry_map(sposcar["0positions"][:,i],symops,na,nb,nc)
-        images-=numpy.round(images)
+        images=symmetry_map(sposcar["positions"][:,i],symops,na,nb,nc)
+        images-=numpy.floor(images)
         for j in range(nops):
-            for k in range(ntot):
-                if numpy.allclose(images[:,j],references[:,k]):
-                    nruter[j,i]=k
+            im=images[:,j]*[na,nb,nc]
+            a,b,c=numpy.floor(im).astype(numpy.int32)
+            im=images[:,j]-numpy.array([a,b,c],dtype=numpy.float64)/[na,nb,nc]
+            for k in range(nat):
+                if numpy.allclose(im,references[:,k]):
+                    match=k
                     break
             else:
                 sys.exit("Error: inconsistency found when studying symmetries")
+            nruter[j,i]=ind2id(a,b,c,match,na,nb,nc,nat)
     return nruter
 
 
@@ -197,9 +201,10 @@ def wedge(poscar,symops,na,nb,nc):
     equivalences=gen_equivalences(sposcar,symops,na,nb,nc)
     frange=FORCE_CUTOFF*max(
         [scipy.linalg.norm(poscar["lattvec"][:,i]) for i in range(3)])
+    frange2=frange**2
     tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
-    calc_norm=lambda x:numpy.sqrt(numpy.dot(x,numpy.dot(tensor,x)))
-    calc_dist=lambda x,y:calc_norm(x-y)
+    calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
+    calc_dist2=lambda x,y:calc_norm2(x-y)
     orth=numpy.empty(symops.rotations.shape)
     for i in range(nops):
         orth[i,:,:]=numpy.dot(scipy.linalg.solve(poscar["lattvec"].T,
@@ -215,21 +220,21 @@ def wedge(poscar,symops,na,nb,nc):
     nindependent=[]
     independent=[]
     transformationaux=[]
-    for ii,jj in itertools.product(range(ntot),range(ntot)):
-        if (calc_dist(sposcar["0positions"][:,ii],
+    for ii,jj in itertools.product(range(nat),range(ntot)):
+        if (calc_dist2(sposcar["0positions"][:,ii],
                        sposcar["0positions"][:,jj])
-            >=frange):
+            >=frange2):
             continue
         for kk in range(ntot):
             triplet=(ii,jj,kk)
             summ+=1
             if triplet in alllist:
                 continue
-            if (max(calc_dist(sposcar["0positions"][:,ii],
+            if (max(calc_dist2(sposcar["0positions"][:,ii],
                              sposcar["0positions"][:,kk]),
-                    calc_dist(sposcar["0positions"][:,jj],
+                    calc_dist2(sposcar["0positions"][:,jj],
                               sposcar["0positions"][:,kk]))
-                >=frange):
+                >=frange2):
                 continue
             thelist.append(copy.copy(triplet))
             allequilist.append([])
