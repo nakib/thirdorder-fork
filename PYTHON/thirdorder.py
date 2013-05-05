@@ -31,10 +31,11 @@ if __name__=="__main__":
     if action=="seed":
         if len(sys.argv)!=5:
             sys.exit("Usage: {} seed na nb nc".format(sys.argv[0]))
-        na,nb,nc=[float(i) for i in sys.argv[2:]]
+        na,nb,nc=[int(i) for i in sys.argv[2:]]
         poscar=common.read_POSCAR(".")
         symops=spg.SymmetryOperations(poscar["lattvec"],poscar["types"],
                                       poscar["positions"].T)
         print "Symmetry group {} detected".format(symops.symbol)
+        wedgeres=common.wedge(poscar,symops,na,nb,nc)
     else:
         pass
