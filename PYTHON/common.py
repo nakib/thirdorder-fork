@@ -30,7 +30,7 @@ import scipy.linalg
 
 # Forces are considered to be cero among two atoms separated more than
 # FORCE_CUTOFF times the maximum lattice vector length.
-FORCE_CUTOFF=0.85*numpy.sqrt(2.)
+FORCE_CUTOFF=1.2*numpy.sqrt(2.)
 
 @contextlib.contextmanager
 def dir_context(directory):
@@ -111,21 +111,6 @@ def gen_sposcar(poscar,na,nb,nc):
     nruter["types"]=[]
     for i in range(len(nruter["numbers"])):
         nruter["types"]+=[i]*nruter["numbers"][i]
-    # 0positions (with no equivalent in POSCAR files) contains the
-    # position of the periodic image of each atom that is closer to
-    # the origin of coordinates.
-    nruter["0positions"]=numpy.array(nruter["positions"])
-    tensor=numpy.dot(nruter["lattvec"].T,nruter["lattvec"])
-    for i in range(nruter["positions"].shape[1]):
-        d2min=numpy.inf
-        for (ia,ib,ic) in itertools.product(range(-1,2),
-                                            range(-1,2),
-                                            range(-1,2)):
-            pos=nruter["positions"][:,i]+[ia,ib,ic]
-            d2=numpy.dot(pos,numpy.dot(tensor,pos))
-            if d2<d2min:
-                d2min=d2
-                nruter["0positions"][:,i]=pos
     return nruter
 
 
@@ -208,10 +193,22 @@ def wedge(poscar,symops,na,nb,nc):
     calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
     calc_dist2=lambda x,y:calc_norm2(x-y)
     pairs=numpy.empty((ntot,ntot),dtype=numpy.bool)
-    for ii,jj in itertools.product(range(ntot),range(ntot)):
-        pairs[ii,jj]=(calc_dist2(sposcar["0positions"][:,ii],
-                                 sposcar["0positions"][:,jj])
-                      <frange2)
+    for i in range(ntot-1):
+        pairs[i,i]=True
+        for j in range(i+1,ntot):
+            d2min=numpy.inf
+            for (ia,ib,ic) in itertools.product(range(-1,2),
+                                                range(-1,2),
+                                                range(-1,2)):
+                posi=sposcar["positions"][:,i]+[ia,ib,ic]
+                for (ja,jb,jc) in itertools.product(range(-1,2),
+                                                    range(-1,2),
+                                                    range(-1,2)):
+                    posj=sposcar["positions"][:,j]+[ja,jb,jc]
+                    d2=calc_dist2(posi,posj)
+                    if d2<d2min:
+                        d2min=d2
+            pairs[i,j]=pairs[j,i]=(d2min<frange2)
     orth=numpy.empty(symops.rotations.shape)
     for i in range(nops):
         orth[i,:,:]=numpy.dot(scipy.linalg.solve(poscar["lattvec"].T,
