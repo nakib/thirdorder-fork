@@ -25,12 +25,12 @@ import spg
 import common
 
 if __name__=="__main__":
-    if len(sys.argv)<2 or sys.argv[1] not in ("seed","harvest"):
-        sys.exit("Usage: {} seed|harvest [options]".format(sys.argv[0]))
+    if len(sys.argv)<2 or sys.argv[1] not in ("sow","reap"):
+        sys.exit("Usage: {} sow|reap [options]".format(sys.argv[0]))
     action=sys.argv[1]
-    if action=="seed":
+    if action=="sow":
         if len(sys.argv)!=5:
-            sys.exit("Usage: {} seed na nb nc".format(sys.argv[0]))
+            sys.exit("Usage: {} sow na nb nc".format(sys.argv[0]))
         na,nb,nc=[int(i) for i in sys.argv[2:]]
         poscar=common.read_POSCAR(".")
         symops=spg.SymmetryOperations(poscar["lattvec"],poscar["types"],
