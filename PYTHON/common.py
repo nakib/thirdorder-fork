@@ -30,7 +30,7 @@ import scipy.linalg
 
 # Forces are considered to be cero among two atoms separated more than
 # FORCE_CUTOFF times the maximum lattice vector length.
-FORCE_CUTOFF=0.85
+FORCE_CUTOFF=0.85*numpy.sqrt(2.)
 
 @contextlib.contextmanager
 def dir_context(directory):
@@ -172,20 +172,22 @@ def gen_equivalences(sposcar,symops,na,nb,nc):
     references=numpy.array(sposcar["positions"][:,:nat])
     nops=symops.translations.shape[0]
     nruter=numpy.empty((nops,ntot),dtype=numpy.int32)
+    im=numpy.empty((3,nat))
+    zim=numpy.empty((3,nat),dtype=numpy.int32)
+    ds=numpy.empty(nat)
     for i in range(ntot):
         images=symmetry_map(sposcar["positions"][:,i],symops,na,nb,nc)
         images-=numpy.floor(images)
         for j in range(nops):
-            im=images[:,j]*[na,nb,nc]
-            a,b,c=numpy.floor(im).astype(numpy.int32)
-            im=images[:,j]-numpy.array([a,b,c],dtype=numpy.float64)/[na,nb,nc]
             for k in range(nat):
-                if numpy.allclose(im,references[:,k]):
-                    match=k
-                    break
-            else:
+                im[:,k]=(images[:,j]-references[:,k])*[na,nb,nc]
+                zim[:,k]=numpy.round(im[:,k])
+                ds[k]=numpy.abs(im[:,k]-zim[:,k]).max()
+            match=ds.argmin()
+            nruter[j,i]=ind2id(zim[0,match],zim[1,match],zim[2,match],
+                               match,na,nb,nc,nat)
+            if ds.min()>1e-6:
                 sys.exit("Error: inconsistency found when studying symmetries")
-            nruter[j,i]=ind2id(a,b,c,match,na,nb,nc,nat)
     return nruter
 
 
