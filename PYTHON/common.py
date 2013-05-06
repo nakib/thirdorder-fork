@@ -28,9 +28,6 @@ import numpy.linalg
 import scipy
 import scipy.linalg
 
-# Forces are considered to be cero among two atoms separated more than
-# FORCE_CUTOFF times the maximum lattice vector length.
-FORCE_CUTOFF=1.2*numpy.sqrt(2.)
 
 @contextlib.contextmanager
 def dir_context(directory):
@@ -54,7 +51,7 @@ def read_POSCAR(directory):
         nruter["lattvec"]=numpy.empty((3,3))
         f=open(os.path.join(directory,"POSCAR"),"r")
         firstline=f.next()
-        factor=float(f.next().strip())
+        factor=.1*float(f.next().strip())
         for i in range(3):
             nruter["lattvec"][:,i]=[float(j) for j in f.next().split()]
         nruter["lattvec"]*=factor
@@ -112,6 +109,47 @@ def gen_sposcar(poscar,na,nb,nc):
     for i in range(len(nruter["numbers"])):
         nruter["types"]+=[i]*nruter["numbers"][i]
     return nruter
+
+
+def calc_frange2(poscar):
+    """
+    Return the squared maximum distance between fourth neighbors in
+    the structure.
+    """
+    nat=poscar["positions"].shape[1]
+    tensor=numpy.dot(poscar["lattvec"].T,poscar["lattvec"])
+    calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
+    calc_dist2=lambda x,y:calc_norm2(x-y)
+    d2=numpy.empty((nat,nat))
+    for i in range(nat-1):
+        d2[i,i]=0.
+        posi=poscar["positions"][:,i]
+        for j in range(i+1,nat):
+            d2min=numpy.inf
+            for (ja,jb,jc) in itertools.product(range(-1,2),
+                                                range(-1,2),
+                                                range(-1,2)):
+                posj=poscar["positions"][:,j]+[ja,jb,jc]
+                d2new=calc_dist2(posi,posj)
+                if d2new<d2min:
+                    d2min=d2new
+            d2[j,i]=d2[i,j]=d2min
+    tofourth=[]
+    for i in range(nat):
+        ds=d2[i,:].tolist()
+        ds.sort()
+        u=[]
+        for j in ds:
+            for k in u:
+                if numpy.allclose(k,j):
+                    break
+            else:
+                u.append(j)
+        try:
+            tofourth.append(u[3])
+        except IndexError:
+            tofourth.append(max(u))
+    return max(tofourth)
 
 
 def symmetry_map(r_in,symops,na,nb,nc):
@@ -176,7 +214,7 @@ def gen_equivalences(sposcar,symops,na,nb,nc):
     return nruter
 
 
-def wedge(poscar,symops,na,nb,nc):
+def wedge(poscar,symops,na,nb,nc,frange2=None):
 
     """
     Find out triplets with nonzero anharmonic IFCs in an irreducible wedge.
@@ -186,28 +224,25 @@ def wedge(poscar,symops,na,nb,nc):
     nops=symops.translations.shape[0]
     sposcar=gen_sposcar(poscar,na,nb,nc)
     equivalences=gen_equivalences(sposcar,symops,na,nb,nc)
-    frange=FORCE_CUTOFF*max(
-        [scipy.linalg.norm(poscar["lattvec"][:,i]) for i in range(3)])
-    frange2=frange**2
+    if frange2==None:
+        frange2=calc_frange2(sposcar)
+        print "Automatic force cutoff",numpy.sqrt(frange2),"nm"
     tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
     calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
     calc_dist2=lambda x,y:calc_norm2(x-y)
     pairs=numpy.empty((ntot,ntot),dtype=numpy.bool)
     for i in range(ntot-1):
         pairs[i,i]=True
+        posi=sposcar["positions"][:,i]
         for j in range(i+1,ntot):
             d2min=numpy.inf
-            for (ia,ib,ic) in itertools.product(range(-1,2),
+            for (ja,jb,jc) in itertools.product(range(-1,2),
                                                 range(-1,2),
                                                 range(-1,2)):
-                posi=sposcar["positions"][:,i]+[ia,ib,ic]
-                for (ja,jb,jc) in itertools.product(range(-1,2),
-                                                    range(-1,2),
-                                                    range(-1,2)):
-                    posj=sposcar["positions"][:,j]+[ja,jb,jc]
-                    d2=calc_dist2(posi,posj)
-                    if d2<d2min:
-                        d2min=d2
+                posj=sposcar["positions"][:,j]+[ja,jb,jc]
+                d2=calc_dist2(posi,posj)
+                if d2<d2min:
+                    d2min=d2
             pairs[i,j]=pairs[j,i]=(d2min<frange2)
     orth=numpy.empty(symops.rotations.shape)
     for i in range(nops):

@@ -31,14 +31,18 @@ if __name__=="__main__":
         sys.exit("Usage: {} sow|reap [options]".format(sys.argv[0]))
     action=sys.argv[1]
     if action=="sow":
-        if len(sys.argv)!=5:
-            sys.exit("Usage: {} sow na nb nc".format(sys.argv[0]))
-        na,nb,nc=[int(i) for i in sys.argv[2:]]
+        if len(sys.argv) not in (5,6):
+            sys.exit("Usage: {} sow na nb nc [cutoff[nm]]".format(sys.argv[0]))
+        na,nb,nc=[int(i) for i in sys.argv[2:5]]
+        if len(sys.argv)==6:
+            frange2=float(sys.argv[5])**2
+        else:
+            frange2=None
         poscar=common.read_POSCAR(".")
         symops=spg.SymmetryOperations(poscar["lattvec"],poscar["types"],
                                       poscar["positions"].T)
         print "Symmetry group {} detected".format(symops.symbol)
-        wedgeres=common.wedge(poscar,symops,na,nb,nc)
+        wedgeres=common.wedge(poscar,symops,na,nb,nc,frange2)
         ntotalindependent=sum([len(i) for i in wedgeres[3]])
 
         list6=[]
