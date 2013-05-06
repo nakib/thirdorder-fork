@@ -21,6 +21,8 @@
 import sys
 import os
 import os.path
+import collections
+import numpy
 import spg
 import common
 
@@ -37,5 +39,30 @@ if __name__=="__main__":
                                       poscar["positions"].T)
         print "Symmetry group {} detected".format(symops.symbol)
         wedgeres=common.wedge(poscar,symops,na,nb,nc)
+        ntotalindependent=sum([len(i) for i in wedgeres[3]])
+
+        list6=[]
+        for ii in range(len(wedgeres[0])):
+            for jj in range(len(wedgeres[3][ii])):
+                ll=(wedgeres[3][ii][jj]-1)//9
+                mm=((wedgeres[3][ii][jj]-1)//9)%3
+                nn=(wedgeres[3][ii][jj]-1)%3
+                list6.append(
+                    (ll,wedgeres[0][ii][0],
+                     mm,wedgeres[0][ii][1],
+                     nn,wedgeres[0][ii][2]))
+        aux=collections.OrderedDict()
+        for x in list6:
+            aux[x[:4]]=True
+        list4=aux.keys()
+        print len(list4)
+        f=open("List_4.d","w")
+        for i in list4:
+            f.write("{0[1]} {0[3]} {0[0]} {0[2]}\n".format(i))
+        f.close()
+        f=open("List_6.d","w")
+        for i in list6:
+            f.write("{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}\n".format(i))
+        f.close()
     else:
         pass
