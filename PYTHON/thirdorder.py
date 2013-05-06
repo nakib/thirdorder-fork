@@ -44,16 +44,16 @@ if __name__=="__main__":
         list6=[]
         for ii in range(len(wedgeres[0])):
             for jj in range(len(wedgeres[3][ii])):
-                ll=(wedgeres[3][ii][jj]-1)//9
-                mm=((wedgeres[3][ii][jj]-1)//9)%3
-                nn=(wedgeres[3][ii][jj]-1)%3
+                ll=wedgeres[3][ii][jj]//9
+                mm=(wedgeres[3][ii][jj]//9)%3
+                nn=wedgeres[3][ii][jj]%3
                 list6.append(
                     (ll,wedgeres[0][ii][0],
                      mm,wedgeres[0][ii][1],
                      nn,wedgeres[0][ii][2]))
         aux=collections.OrderedDict()
-        for x in list6:
-            aux[x[:4]]=True
+        for i in list6:
+            aux[i[:4]]=None
         list4=aux.keys()
         print len(list4)
         f=open("List_4.d","w")
