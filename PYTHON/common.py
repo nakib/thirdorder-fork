@@ -147,9 +147,9 @@ def calc_frange2(poscar):
             else:
                 u.append(j)
         try:
-            tofourth.append(u[3])
+            tofourth.append(.5*(u[3]+u[4]))
         except IndexError:
-            tofourth.append(max(u))
+            tofourth.append(1.1*max(u))
     return max(tofourth)
 
 
