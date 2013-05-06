@@ -22,6 +22,7 @@ import sys
 import os
 import copy
 import itertools
+import collections
 import contextlib
 import numpy
 import numpy.linalg
@@ -84,7 +85,7 @@ def read_POSCAR(directory):
     return nruter
 
 
-def gen_sposcar(poscar,na,nb,nc):
+def gen_SPOSCAR(poscar,na,nb,nc):
     """
     Create a dictionary similar to the first argument but describing a
     supercell.
@@ -222,7 +223,7 @@ def wedge(poscar,symops,na,nb,nc,frange2=None):
     nat=poscar["positions"].shape[1]
     ntot=nat*na*nb*nc
     nops=symops.translations.shape[0]
-    sposcar=gen_sposcar(poscar,na,nb,nc)
+    sposcar=gen_SPOSCAR(poscar,na,nb,nc)
     equivalences=gen_equivalences(sposcar,symops,na,nb,nc)
     if frange2==None:
         frange2=calc_frange2(sposcar)
@@ -345,8 +346,6 @@ def wedge(poscar,symops,na,nb,nc,frange2=None):
             rematrix[:,iindep]=coeffi_reduced[:,iindep]
             b=scipy.linalg.lstsq(rematrix,coeffi_reduced)[0].T
             transformationaux.append(b)
-    print "nlist={}".format(len(thelist))
-    print "nalllist={}".format(len(alllist))
     transformationaux=numpy.array(transformationaux)
     transformationarray=numpy.zeros((27,27,nops*6,len(thelist)))
     for ii in range(len(thelist)):
@@ -355,3 +354,25 @@ def wedge(poscar,symops,na,nb,nc,frange2=None):
                 transformation[ii][jj],
                 transformationaux[ii][:,:nindependent[ii]])
     return (thelist,allequilist,transformationarray,independent)
+
+
+def build_list4(wedgeres):
+    """
+    Build a list of 4-uples from the result of wedge.
+    """
+    ntotalindependent=sum([len(i) for i in wedgeres[3]])
+    list6=[]
+    for ii in range(len(wedgeres[0])):
+        for jj in range(len(wedgeres[3][ii])):
+            ll=wedgeres[3][ii][jj]//9
+            mm=(wedgeres[3][ii][jj]%9)//3
+            nn=wedgeres[3][ii][jj]%3
+            list6.append(
+                (ll,wedgeres[0][ii][0],
+                 mm,wedgeres[0][ii][1],
+                 nn,wedgeres[0][ii][2]))
+    aux=collections.OrderedDict()
+    for i in list6:
+        fournumbers=(i[1],i[3],i[0],i[2])
+        aux[fournumbers]=None
+    return aux.keys()
