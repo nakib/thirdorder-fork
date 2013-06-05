@@ -274,13 +274,10 @@ def build_list4(wedgeres):
                 (ll,wedgeres["List"][0,ii],
                  mm,wedgeres["List"][1,ii],
                  nn,wedgeres["List"][2,ii]))
-    print "L6",len(list6)
     aux=collections.OrderedDict()
     for i in list6:
         fournumbers=(i[1],i[3],i[0],i[2])
         aux[fournumbers]=None
-    for i in aux.keys():
-        print i
     return aux.keys()
 
 
