@@ -65,8 +65,8 @@ contains
 
     real(kind=C_DOUBLE) :: dnrm2
 
-    Allocsize=8192
-    AllAllocsize=524288
+    Allocsize=1024
+    AllAllocsize=65536
 
     allocate(Nequi(Allocsize))
     allocate(AllEquiList(3,Nsymm*6,Allocsize))
