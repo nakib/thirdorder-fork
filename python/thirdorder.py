@@ -335,6 +335,7 @@ if __name__=="__main__":
             sys.exit("Error: invalid cutoff")
     print "Reading POSCAR"
     poscar=read_POSCAR(".")
+    natoms=len(poscar["types"])
     print "Analyzing symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
@@ -343,6 +344,7 @@ if __name__=="__main__":
     print "- {} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
     sposcar=gen_SPOSCAR(poscar,na,nb,nc)
+    ntot=natoms*na*nb*nc
     if nneigh!=None:
         frange=calc_frange(sposcar,nneigh)
         print "- Automatic cutoff: {} nm".format(frange)
@@ -352,7 +354,8 @@ if __name__=="__main__":
     wedgeres=thirdorder_core.pywedge(poscar,sposcar,symops,frange)
     print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
     list4=build_list4(wedgeres)
-    nruns=4*len(list4)
+    nirred=len(list4)
+    nruns=4*nirred
     print "- {} DFT runs are needed".format(nruns)
     if action=="sow":
         print sowblock
@@ -365,6 +368,8 @@ if __name__=="__main__":
             for n in range(4):
                 isign=(-1)**(n%2)
                 jsign=(-1)**(n//2)
+                # Start numbering the files at 1 for aesthetic
+                # reasons.
                 number=4*i+n+1
                 dsposcar=normalize_SPOSCAR(
                     move_two_atoms(sposcar,
@@ -382,7 +387,7 @@ if __name__=="__main__":
                 continue
             filelist.append(s)
         nfiles=len(filelist)
-        print "{} filenames read".format(nfiles)
+        print "- {} filenames read".format(nfiles)
         if nfiles!=nruns:
             sys.exit("Error: {} filenames were expected".
                      format(nruns))
@@ -396,4 +401,13 @@ if __name__=="__main__":
         for i in filelist:
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
+        print "Computing an irreducible set of anharmonic force constants"
+        phi_part=numpy.empty((3,3,nirred,ntot))
+        subforces=numpy.empty((4,3))
+        for i,e in enumerate(list4):
+            for n in range(4):
+                isign=(-1)**(n%2)
+                jsign=(-1)**(n//2)
+                number=4*i+n
+        # TODO: continue from here
     print doneblock
