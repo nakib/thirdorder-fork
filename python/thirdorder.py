@@ -380,7 +380,7 @@ if __name__=="__main__":
             s=l.strip()
             if len(s)==0:
                 continue
-            filelist.append(s)\
+            filelist.append(s)
         nfiles=len(filelist)
         print "{} filenames read".format(nfiles)
         if nfiles!=nruns:
