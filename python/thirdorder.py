@@ -287,7 +287,7 @@ def read_forces(filename):
     Read a set of forces on atoms from filename, presumably in
     vasprun.xml format.
     """
-    calculation=ElementTree.parse("vasprun.xml"
+    calculation=ElementTree.parse(filename
                                   ).getroot().find("calculation")
     for a in calculation.findall("varray"):
         if a.attrib["name"]=="forces":
