@@ -311,8 +311,86 @@ def build_unpermutation(sposcar):
     return indices.argsort().tolist()
 
 
+def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
+    """
+    Recover the full anharmonic IFC matrix from the irreducible set of
+    force constants.
+    """
+    natoms=len(poscar["types"])
+    ntot=len(sposcar["types"])
+    nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
+    naccumindependent=numpy.cumsum(wedgeres["NListIndependentBasis"])
+    ntotalindependent=naccumindependent[-1]
+    for i,e in enumerate(list4):
+        nruter[e[1],e[3],:,e[0],e[1],:]=phipart[:,i,:]
+    philist=[]
+    for ii in range(wedgeres["Nlist"]):
+        for jj in range(wedgeres["NIndependentBasis"][ii]):
+            ll=wedgeres["IndependentBasis"][jj,ii]//9
+            mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
+            nn=wedgeres["IndependentBasis"][jj,ii]%3
+            philist.append(nruter[ll,mm,nn,
+                                  wedgeres["List"][0,ii],
+                                  wedgeres["List"][1,ii]
+                                  wedgeres["List"][2,ii]])
+    philist=numpy.array(philist)
+    ind1equi=numpy.zeros((natoms,ntot,ntot))
+    ind2equi=numpy.zeros((natoms,ntot,ntot))
+    for ii in range(wedgeres["Nlist"]):
+        for jj in range(wedgeres["Nequi"][ii]):
+            ind1equi[wedgeres["ALLEquiList"][0,jj,ii],
+                     wedgeres["ALLEquiList"][1,jj,ii],
+                     wedgeres["ALLEquiList"][2,jj,ii]]=ii
+            ind2equi[wedgeres["ALLEquiList"][0,jj,ii],
+                     wedgeres["ALLEquiList"][1,jj,ii],
+                     wedgeres["ALLEquiList"][2,jj,ii]]=ii
+    aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
+    nnonzero=0
+    nonzerolist=[]
+    for ii,jj,ll,mm,nn in itertools.product(range(natoms),
+                                            range(ntot),
+                                            range(3),
+                                            range(3),
+                                            range(3)):
+        tribasisindex=(ll*3+mm)*3+nn
+        rowindex==(ii*Natoms+jj)*27+tribasisindex
+        for kk,ix in itertools.product(range(ntot),
+                                       range(wedgeres["Nlist"])):
+            if in1equi(ii,jj,kk)==ix:
+                aa[rowindex,naccumindependent[ix]:naccumindependent[ix+1]]=(
+                    a[rowindex,naccumindependent[ix]:naccumindependent[ix+1]]+
+                    wedgeres["TransformationArray"][tribasisindex,:wedgeres["NIndependentBasis"][ix],
+                                                    ind2equi[ii,jj,kk],ix])
+        aa[rowindex,aa[rowindex,:]<=1e-14]=0.
+        aa[nnonzero,:ntotalindependent]=aa[rowindex,:ntotalindependent]
+        nnonzero+=1
+    aux=numpy.array(aa[:nnonzero,:ntotalindependent])
+    gaussianres=thirdorder_core.pygaussian(aux)
+    aux=gaussianres["a"]
+    nnonzero=gaussianres["NIndependent"]
+    bb=numpy.array(aux[:nnonzero,:ntotalindependent])
+    sumauxlist=numpy.dot(bb,philist)
+    cc=numpy.dot(bb,bb.T)
+    multiplier=scipy.linalg.solve(cc,sumauxlist)
+    compensation=numpy.dot(multiplier,BB)
+    nruter=0.
+    for ii in range(wedgeres["Nlist"]):
+        for jj in range(wedgeres["Nequi"][i]):
+            for ll,mm,nn in itertools.product(range(3),
+                                              range(3),
+                                              range(3)):
+                tribasisindex=(ll*3+mm)*3+nn
+                for ix in range(wedgeres["NIndependentBasis"][ii]):
+                    nruter[ll,mm,nn,wedgeres["ALLEquiList"][0,jj,ii],
+                           wedgeres["ALLEquiList"][1,jj,ii],
+                           wedgeres["ALLEquiList"][2,jj,ii]
+                           ]+=wedgeres["TransformationArray"][
+                               tribasisindex,ix,jj,ii]*philist[
+                                   naccumindependent[ii]+ix]
+    return nruter
+
+
 if __name__=="__main__":
-    # TODO: allow positive and negative arguments.
     if len(sys.argv)!=6 or sys.argv[1] not in ("sow","reap"):
         sys.exit("Usage: {} sow|reap na nb nc cutoff[nm/-integer]".format(sys.argv[0]))
     action=sys.argv[1]
@@ -406,13 +484,14 @@ if __name__=="__main__":
             print "- \t average residual force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
-        phi_part=numpy.zeros((3,nirred,ntot))
+        phipart=numpy.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
             for n in range(4):
                 isign=(-1)**(n%2)
                 jsign=(-1)**(n//2)
                 number=4*i+n
-                phi_part[:,i,:]-=isign*jsign*forces[number].T
-        phi_part/=(4.*H*H)
-        # TODO: continue from here
+                phipart[:,i,:]-=isign*jsign*forces[number].T
+        phipart/=(4.*H*H)
+        print "Reconstructing the full matrix"
+        phifull=reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
     print doneblock
