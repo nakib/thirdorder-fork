@@ -475,7 +475,7 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
                                 numpy.dot(poscar["lattvec"],
                                           poscar["positions"][:,jatom]))
                 cark=(numpy.dot(sposcar["lattvec"],
-                                shift2+sposcar["positions"][:,kk])-
+                                shift3+sposcar["positions"][:,kk])-
                                 numpy.dot(poscar["lattvec"],
                                           poscar["positions"][:,katom]))
                 nblocks+=1
