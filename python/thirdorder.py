@@ -21,6 +21,7 @@
 import sys
 import os
 import os.path
+import tempfile
 import copy
 import glob
 import itertools
@@ -413,7 +414,8 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
     ntot=len(sposcar["types"])
 
     nblocks=0
-    f=open(filename,"w")
+    tmpname=tempfile.mkstemp()[1]
+    f=open(tmpname,"w")
 
     tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
     calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
@@ -489,8 +491,13 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
                                                   range(3)):
                     f.write("{:>2d} {:>2d} {:>2d} {:>20.10e}\n".
                             format(ll+1,mm+1,nn+1,phifull[ll,mm,nn,ii,jj,kk]))
-    f.seek(0)
+    f.close()
+    f=open(filename,"w")
     f.write("{:>5}\n".format(nblocks))
+    ftmp=open(tmpname,"r")
+    for l in ftmp:
+        f.write(l)
+    ftmp.close()
     f.close()
 
 
