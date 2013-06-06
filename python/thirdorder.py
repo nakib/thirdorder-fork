@@ -458,6 +458,8 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
                     if numpy.abs(d2s[i]-d2min)<1e-2:
                         shift3all[:,n3equi]=[ja,jb,jc]
                         n3equi+=1
+                if d2min>=frange2:
+                    continue
                 dp2min=numpy.inf
                 for iaux in range(n2equi):
                     for jaux in range(n3equi):
