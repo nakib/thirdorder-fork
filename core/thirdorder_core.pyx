@@ -240,3 +240,34 @@ def pywedge(poscar,sposcar,symops,frange):
     nruter["TransformationArray"]=nruter["TransformationArray"].T
     nruter["IndependentBasis"]=nruter["IndependentBasis"].T-1
     return nruter
+
+
+def pygaussian(m):
+    """
+    Straightforward wrapper around the gaussian() subroutine. m is
+    left unchanged.
+    """
+    cdef int row,colum,Ndependent,NIndependent
+    cdef void *IndexIndependent,*a,*b
+
+    row,column=m.shape
+    IndexIndependent=malloc(column*sizeof(int))
+    a=malloc(row*column*sizeof(double))
+    b=malloc(column*column*sizeof(double))
+
+    cthirdorder_core.cgaussian(a,row,column,&Ndependent,b,
+                               &NIndependent,IndexIndependent)
+
+    nruter=dict()
+    nruter["IndexIndependent"]=numpy.empty(column,dtype=numpy.int32)
+    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent
+    nruter["a"]=numpy.empty((column,row))
+    nruter["a"][:,:]=<double[:column,:row]>a
+    nruter["a"]=nruter["a"].T
+    nruter["b"]=numpy.empty((column,column))
+    nruter["b"][:,:]=<double[:column,:column]>b
+    nruter["b"]=nruter["b"].T
+    free(b)
+    free(a)
+    free(IndexIndependent)
+    return nruter
