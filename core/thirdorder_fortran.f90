@@ -542,7 +542,7 @@ contains
     Ind2Id=(Ind_cell(1)+(Ind_cell(2)+Ind_cell(3)*Ngrid2)*Ngrid1)*Nspecies+Ind_species
   end function Ind2Id
 
-  subroutine gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
+  subroutine gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent) bind(c,name="gaussian")
     implicit none
 
     real(kind=C_DOUBLE),parameter :: EPS=1.d-10
