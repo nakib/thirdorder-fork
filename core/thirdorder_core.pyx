@@ -247,12 +247,16 @@ def pygaussian(m):
     Straightforward wrapper around the gaussian() subroutine. m is
     left unchanged.
     """
+    cdef int i,j
     cdef int row,colum,Ndependent,NIndependent
     cdef void *IndexIndependent,*a,*b
 
     row,column=m.shape
     IndexIndependent=malloc(column*sizeof(int))
     a=malloc(row*column*sizeof(double))
+    for i in range(row):
+        for j in range(column):
+            (<double(*)>a)[i+j*row]=m[i,j]
     b=malloc(column*column*sizeof(double))
 
     cthirdorder_core.cgaussian(a,row,column,&Ndependent,b,
