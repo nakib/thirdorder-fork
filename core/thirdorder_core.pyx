@@ -236,7 +236,7 @@ def pywedge(poscar,sposcar,symops,frange):
                                 vTransformationArray,vNIndependentBasis,
                                 vIndependentBasis)
     nruter["List"]=nruter["List"].T-1
-    nruter["AllEquiList"]=nruter["ALLEquiList"].T-1
+    nruter["ALLEquiList"]=nruter["ALLEquiList"].T-1
     nruter["TransformationArray"]=nruter["TransformationArray"].T
     nruter["IndependentBasis"]=nruter["IndependentBasis"].T-1
     return nruter
@@ -266,7 +266,7 @@ def pygaussian(m):
     nruter["Ndependent"]=int(Ndependent)
     nruter["NIndependent"]=int(NIndependent)
     nruter["IndexIndependent"]=numpy.empty(column,dtype=numpy.int32)
-    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent
+    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent-1
     nruter["a"]=numpy.empty((column,row))
     nruter["a"][:,:]=<double[:column,:row]>a
     nruter["a"]=nruter["a"].T

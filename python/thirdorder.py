@@ -319,10 +319,10 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
     nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.cumsum(wedgeres["NListIndependentBasis"])
+    naccumindependent=numpy.cumsum(wedgeres["NIndependentBasis"])
     ntotalindependent=naccumindependent[-1]
     for i,e in enumerate(list4):
-        nruter[e[1],e[3],:,e[0],e[1],:]=phipart[:,i,:]
+        nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
     philist=[]
     for ii in range(wedgeres["Nlist"]):
         for jj in range(wedgeres["NIndependentBasis"][ii]):
@@ -331,7 +331,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
             nn=wedgeres["IndependentBasis"][jj,ii]%3
             philist.append(nruter[ll,mm,nn,
                                   wedgeres["List"][0,ii],
-                                  wedgeres["List"][1,ii]
+                                  wedgeres["List"][1,ii],
                                   wedgeres["List"][2,ii]])
     philist=numpy.array(philist)
     ind1equi=numpy.zeros((natoms,ntot,ntot))
@@ -343,7 +343,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                      wedgeres["ALLEquiList"][2,jj,ii]]=ii
             ind2equi[wedgeres["ALLEquiList"][0,jj,ii],
                      wedgeres["ALLEquiList"][1,jj,ii],
-                     wedgeres["ALLEquiList"][2,jj,ii]]=ii
+                     wedgeres["ALLEquiList"][2,jj,ii]]=jj
     aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
     nnonzero=0
     nonzerolist=[]
@@ -481,7 +481,7 @@ if __name__=="__main__":
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
             res=forces[-1].sum(axis=0)
-            print "- \t average residual force:"
+            print "- \t Average residual force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
         phipart=numpy.zeros((3,nirred,ntot))
