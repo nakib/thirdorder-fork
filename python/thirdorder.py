@@ -150,10 +150,11 @@ def gen_SPOSCAR(poscar,na,nb,nc):
     return nruter
 
 
-def calc_frange(poscar,n):
+def calc_dists2(poscar):
     """
-    Return the squared maximum distance between n-th neighbors in
-    the structure.
+    Return a matrix with the squared distances between atoms
+    in the supercell, using normal images.
+
     """
     nat=poscar["positions"].shape[1]
     tensor=numpy.dot(poscar["lattvec"].T,poscar["lattvec"])
@@ -173,7 +174,18 @@ def calc_frange(poscar,n):
                 if d2new<d2min:
                     d2min=d2new
             d2[j,i]=d2[i,j]=d2min
+    return d2
+
+
+def calc_frange(poscar,n):
+    """
+    Return the squared maximum distance between n-th neighbors in
+    the structure.
+    """
+    nat=poscar["positions"].shape[1]
+    d2=calc_dists2(poscar)
     tonth=[]
+    warned=False
     for i in range(nat):
         ds=d2[i,:].tolist()
         ds.sort()
@@ -187,8 +199,10 @@ def calc_frange(poscar,n):
         try:
             tonth.append(.5*(u[n]+u[n+1]))
         except IndexError:
-            sys.stderr.write(
-                "Warning: supercell too small to find n-th neighbours\n")
+            if not warned:
+                sys.stderr.write(
+                    "Warning: supercell too small to find n-th neighbours\n")
+                warned=True
             tonth.append(1.1*max(u))
     return numpy.sqrt(max(tonth))
 
@@ -389,6 +403,97 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     return nruter
 
 
+def write_ifcs(phifull,poscar,sposcar,frange,filename):
+    """
+    Write out the full anharmonic interatomic force constant matrix,
+    taking the force cutoff into account.
+    """
+    frange2=frange*frange
+    natoms=len(poscar["types"])
+    ntot=len(sposcar["types"])
+
+    nblocks=0
+    f=open(filename,"w")
+
+    tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
+    calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
+    calc_dist2=lambda x,y:calc_norm2(x-y)
+    nruter=[]
+
+    shift2all=numpy.zeros((3,27),dtype=numpy.int32)
+    shift3all=numpy.zeros((3,27),dtype=numpy.int32)
+    d2s=numpy.zeros(27)
+    for ii in range(natoms):
+        posi=sposcar["positions"][:,ii]
+        for jj in range(ntot):
+            for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
+                                                            range(-1,2),
+                                                            range(-1,2))):
+                posj=sposcar["positions"][:,jj]+[ja,jb,jc]
+                d2s[i]=calc_dist2(posi,posj)
+            d2min=d2s.min()
+            n2equi=0
+            for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
+                                                            range(-1,2),
+                                                            range(-1,2))):
+                if numpy.abs(d2s[i]-d2min)<1e-2:
+                    shift2all[:,n2equi]=[ja,jb,jc]
+                    n2equi+=1
+            if d2min>=frange2:
+                continue
+            for kk in range(ntot):
+                n3equi=0
+                for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
+                                                                range(-1,2),
+                                                                range(-1,2))):
+                    posk=sposcar["positions"][:,kk]+[ja,jb,jc]
+                    d2s[i]=calc_dist2(posi,posk)
+                d2min=d2s.min()
+                n3equi=0
+                for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
+                                                                range(-1,2),
+                                                                range(-1,2))):
+                    if numpy.abs(d2s[i]-d2min)<1e-2:
+                        shift3all[:,n3equi]=[ja,jb,jc]
+                        n3equi+=1
+                dp2min=numpy.inf
+                for iaux in range(n2equi):
+                    for jaux in range(n3equi):
+                        dp2=calc_dist2(shift2all[:,iaux],shift3all[:,jaux])
+                        if dp2<dp2min:
+                            dp2min=dp2
+                            shift2=shift2all[:,iaux]
+                            shift3=shift3all[:,jaux]
+                if dp2min>=frange2:
+                    continue
+                jatom=jj%natoms
+                katom=kk%natoms
+                carj=(numpy.dot(sposcar["lattvec"],
+                                shift2+sposcar["positions"][:,jj])-
+                                numpy.dot(poscar["lattvec"],
+                                          poscar["positions"][:,jatom]))
+                cark=(numpy.dot(sposcar["lattvec"],
+                                shift2+sposcar["positions"][:,kk])-
+                                numpy.dot(poscar["lattvec"],
+                                          poscar["positions"][:,katom]))
+                nblocks+=1
+                f.write("\n")
+                f.write("{:>5}\n".format(nblocks))
+                f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
+                        format(list(10.*carj)))
+                f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
+                        format(list(10.*cark)))
+                f.write("{:>6d} {:>6d} {:>6d}\n".format(ii+1,jatom+1,katom+1))
+                for ll,mm,nn in itertools.product(range(3),
+                                                  range(3),
+                                                  range(3)):
+                    f.write("{:>2d} {:>2d} {:>2d} {:>20.10e}\n".
+                            format(ll+1,mm+1,nn+1,phifull[ll,mm,nn,ii,jj,kk]))
+    f.seek(0)
+    f.write("{:>5}\n".format(nblocks))
+    f.close()
+
+
 if __name__=="__main__":
     if len(sys.argv)!=6 or sys.argv[1] not in ("sow","reap"):
         sys.exit("Usage: {} sow|reap na nb nc cutoff[nm/-integer]".format(sys.argv[0]))
@@ -490,7 +595,9 @@ if __name__=="__main__":
                 jsign=(-1)**(n//2)
                 number=4*i+n
                 phipart[:,i,:]-=isign*jsign*forces[number].T
-        phipart/=(4.*H*H)
+        phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
         phifull=reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        print "Writing the constants to FORCE_CONSTANTS_3RD"
+        write_ifcs(phifull,poscar,sposcar,frange,"FORCE_CONSTANTS_3RD")
     print doneblock
