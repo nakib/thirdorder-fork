@@ -461,13 +461,15 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
                 dp2min=numpy.inf
                 for iaux in range(n2equi):
                     for jaux in range(n3equi):
-                        dp2=calc_dist2(shift2all[:,iaux],shift3all[:,jaux])
+                        dp2=calc_dist2(sposcar["positions"][:,jj]+shift2all[:,iaux],
+                                       sposcar["positions"][:,kk]+shift3all[:,jaux])
                         if dp2<dp2min:
                             dp2min=dp2
                             shift2=shift2all[:,iaux]
                             shift3=shift3all[:,jaux]
                 if dp2min>=frange2:
                     continue
+                nblocks+=1
                 jatom=jj%natoms
                 katom=kk%natoms
                 carj=(numpy.dot(sposcar["lattvec"],
@@ -478,7 +480,6 @@ def write_ifcs(phifull,poscar,sposcar,frange,filename):
                                 shift3+sposcar["positions"][:,kk])-
                                 numpy.dot(poscar["lattvec"],
                                           poscar["positions"][:,katom]))
-                nblocks+=1
                 f.write("\n")
                 f.write("{:>5}\n".format(nblocks))
                 f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
