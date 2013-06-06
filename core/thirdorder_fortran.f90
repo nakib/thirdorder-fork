@@ -542,17 +542,35 @@ contains
     Ind2Id=(Ind_cell(1)+(Ind_cell(2)+Ind_cell(3)*Ngrid2)*Ngrid1)*Nspecies+Ind_species
   end function Ind2Id
 
-  subroutine gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent) bind(c,name="gaussian")
+  subroutine cgaussian(ca,row,column,Ndependent,cb,NIndependent,cIndexIndependent)&
+       bind(C,name="cgaussian")
+
+    integer(kind=C_INT),value,intent(in) :: row,column
+    integer(kind=C_INT),optional,intent(out) :: Ndependent,&
+         Nindependent
+    type(c_ptr),value,intent(in) :: ca,cb,cIndexIndependent
+
+    integer(kind=C_INT),pointer :: IndexIndependent(:)
+    real(kind=C_DOUBLE),pointer :: a(:,:),b(:,:)
+
+    call c_f_pointer(ca,a,shape=[row,column])
+    call c_f_pointer(cb,b,shape=[column,column])
+    call c_f_pointer(cIndexIndependent,IndexIndependent,&
+         shape=[column])
+    call gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
+  end subroutine cgaussian
+
+  subroutine gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
     implicit none
 
     real(kind=C_DOUBLE),parameter :: EPS=1.d-10
-    integer(kind=C_INT),intent(in) :: row,column
-    integer(kind=C_INT),optional,intent(out) :: Nindependent,&
-         IndexIndependent(column)
+    integer(kind=C_INT),value,intent(in) :: row,column
+    integer(kind=C_INT),optional,intent(out) :: Ndependent,&
+         Nindependent,IndexIndependent(column)
     real(kind=C_DOUBLE),intent(inout) :: a(row,column)
     real(kind=C_DOUBLE),intent(out) :: b(column,column)
 
-    integer(kind=C_INT) :: i,j,k,irow,Ndependent,Indexdependent(column)
+    integer(kind=C_INT) :: i,j,k,irow,Indexdependent(column)
     real(kind=C_DOUBLE) :: swap_ik(column)
 
     Nindependent=0
