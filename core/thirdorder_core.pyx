@@ -266,7 +266,8 @@ def pygaussian(m):
     nruter["Ndependent"]=int(Ndependent)
     nruter["NIndependent"]=int(NIndependent)
     nruter["IndexIndependent"]=numpy.empty(column,dtype=numpy.int32)
-    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent-1
+    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent
+    nruter["IndexIndependent"]-=1
     nruter["a"]=numpy.empty((column,row))
     nruter["a"][:,:]=<double[:column,:row]>a
     nruter["a"]=nruter["a"].T

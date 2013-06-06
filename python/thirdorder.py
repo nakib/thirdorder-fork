@@ -319,7 +319,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
     nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.cumsum(wedgeres["NIndependentBasis"])
+    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"]),
+                                   0,[0])
     ntotalindependent=naccumindependent[-1]
     for i,e in enumerate(list4):
         nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
@@ -353,14 +354,14 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                             range(3),
                                             range(3)):
         tribasisindex=(ll*3+mm)*3+nn
-        rowindex==(ii*Natoms+jj)*27+tribasisindex
+        rowindex=(ii*natoms+jj)*27+tribasisindex
         for kk,ix in itertools.product(range(ntot),
                                        range(wedgeres["Nlist"])):
-            if in1equi(ii,jj,kk)==ix:
-                aa[rowindex,naccumindependent[ix]:naccumindependent[ix+1]]=(
-                    a[rowindex,naccumindependent[ix]:naccumindependent[ix+1]]+
-                    wedgeres["TransformationArray"][tribasisindex,:wedgeres["NIndependentBasis"][ix],
-                                                    ind2equi[ii,jj,kk],ix])
+            if ind1equi[ii,jj,kk]==ix:
+                aa[rowindex,naccumindependent[ix]:naccumindependent[ix+1]
+                   ]+=wedgeres["TransformationArray"][
+                       tribasisindex,:wedgeres["NIndependentBasis"][ix],
+                       ind2equi[ii,jj,kk],ix]
         aa[rowindex,aa[rowindex,:]<=1e-14]=0.
         aa[nnonzero,:ntotalindependent]=aa[rowindex,:ntotalindependent]
         nnonzero+=1
@@ -368,14 +369,12 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     gaussianres=thirdorder_core.pygaussian(aux)
     aux=gaussianres["a"]
     nnonzero=gaussianres["NIndependent"]
-    bb=numpy.array(aux[:nnonzero,:ntotalindependent])
-    sumauxlist=numpy.dot(bb,philist)
-    cc=numpy.dot(bb,bb.T)
-    multiplier=scipy.linalg.solve(cc,sumauxlist)
-    compensation=numpy.dot(multiplier,BB)
-    nruter=0.
+    bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
+    multiplier=-scipy.linalg.lstsq(bb,philist)[0]
+    compensation=numpy.dot(bb,multiplier)
+    nruter[:,:,:,:,:,:]=0.
     for ii in range(wedgeres["Nlist"]):
-        for jj in range(wedgeres["Nequi"][i]):
+        for jj in range(wedgeres["Nequi"][ii]):
             for ll,mm,nn in itertools.product(range(3),
                                               range(3),
                                               range(3)):
