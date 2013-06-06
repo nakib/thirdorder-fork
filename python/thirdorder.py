@@ -35,6 +35,7 @@ import thirdorder_core
 
 H=2.116709e-3  # Magnitude of the finite displacements, in nm.
 
+
 sowblock="""
 .d88888b   .88888.  dP   dP   dP
 88.    "' d8'   `8b 88   88   88
@@ -401,13 +402,17 @@ if __name__=="__main__":
         for i in filelist:
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
+            res=forces[-1].sum(axis=0)
+            print "- \t average residual force:"
+            print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
-        phi_part=numpy.empty((3,3,nirred,ntot))
-        subforces=numpy.empty((4,3))
+        phi_part=numpy.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
             for n in range(4):
                 isign=(-1)**(n%2)
                 jsign=(-1)**(n//2)
                 number=4*i+n
+                phi_part[:,i,:]-=isign*jsign*forces[number].T
+        phi_part/=(4.*H*H)
         # TODO: continue from here
     print doneblock
