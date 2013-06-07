@@ -151,43 +151,43 @@ def gen_SPOSCAR(poscar,na,nb,nc):
     return nruter
 
 
-def calc_dists2(poscar):
+def calc_dists2(poscar,sposcar):
     """
     Return a matrix with the squared distances between atoms
     in the supercell, using normal images.
 
     """
-    nat=poscar["positions"].shape[1]
-    tensor=numpy.dot(poscar["lattvec"].T,poscar["lattvec"])
+    natoms=poscar["positions"].shape[1]
+    ntot=sposcar["positions"].shape[1]
+    tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
     calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
     calc_dist2=lambda x,y:calc_norm2(x-y)
-    d2=numpy.empty((nat,nat))
-    for i in range(nat-1):
-        d2[i,i]=0.
-        posi=poscar["positions"][:,i]
-        for j in range(i+1,nat):
+    d2=numpy.empty((natoms,ntot))
+    for i in range(natoms):
+        posi=sposcar["positions"][:,i]
+        for j in range(ntot):
             d2min=numpy.inf
             for (ja,jb,jc) in itertools.product(range(-1,2),
                                                 range(-1,2),
                                                 range(-1,2)):
-                posj=poscar["positions"][:,j]+[ja,jb,jc]
+                posj=sposcar["positions"][:,j]+[ja,jb,jc]
                 d2new=calc_dist2(posi,posj)
                 if d2new<d2min:
                     d2min=d2new
-            d2[j,i]=d2[i,j]=d2min
+            d2[i,j]=d2min
     return d2
 
 
-def calc_frange(poscar,n):
+def calc_frange(poscar,sposcar,n):
     """
     Return the squared maximum distance between n-th neighbors in
     the structure.
     """
-    nat=poscar["positions"].shape[1]
-    d2=calc_dists2(poscar)
+    natoms=poscar["positions"].shape[1]
+    d2=calc_dists2(poscar,sposcar)
     tonth=[]
     warned=False
-    for i in range(nat):
+    for i in range(natoms):
         ds=d2[i,:].tolist()
         ds.sort()
         u=[]
@@ -539,7 +539,7 @@ if __name__=="__main__":
     sposcar=gen_SPOSCAR(poscar,na,nb,nc)
     ntot=natoms*na*nb*nc
     if nneigh!=None:
-        frange=calc_frange(sposcar,nneigh)
+        frange=calc_frange(poscar,sposcar,nneigh)
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
