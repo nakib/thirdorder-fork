@@ -1,6 +1,6 @@
 # thirdorder #
 
-The purpose of thirdorder.py is to help users of [wlsBTE][https://www.bitbucket.org/sousaw/wlsBTE/] create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks. First, it is able to obtain an irreducible  set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. thirdorder.py then saves the displaces supercells to POSCAR files that can be fed to VASP. Second, from the vasprun.xml files resulting from the VASP runs, this script reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
+The purpose of thirdorder.py is to help users of [wlsBTE](https://www.bitbucket.org/sousaw/wlsBTE/) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks. First, it is able to obtain an irreducible  set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. thirdorder.py then saves the displaced supercells to POSCAR files that can be fed to VASP. Second, from the vasprun.xml files created by VASP from these inputs, this script reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
 
 # Compilation #
 
@@ -15,7 +15,7 @@ export CFLAGS=-I/home/user/local/include
 export LDFLAGS=-L/home/user/local/lib -llapack -lgfortran
 ```
 
-The first line specifies the name of the Fortran compiler, in this case GNU Fortran, and the second lists the flags to be passed to it for compiling Fortran code. Especially relevant here is -fPIC, which ensures that the resulting object file can be linked into a dynamic library. The remaining two lines are flags to be passed to the C compiler in the compilation and linking stages, respectively. thirdorder.py uses Atsushi Togo's [spglib][http://spglib.sourceforge.net/], which must be available both at compilation and runtime: make sure to include the appropriate -L flag among LDFLAGS, and to specify the path to libsymspg.so in your LD\_LIBRARY\_PATH environment variable. Finally, note that -lgfortran is needed when using gfortran.
+The first line specifies the name of the Fortran compiler, in this case GNU Fortran, and the second lists the flags to be passed to it for compiling Fortran code. Especially relevant here is -fPIC, which ensures that the resulting object file can be linked into a dynamic library. The remaining two lines are flags to be passed to the C compiler in the compilation and linking stages, respectively. thirdorder.py uses Atsushi Togo's [spglib](http://spglib.sourceforge.net/), which must be available both at compilation and run time: make sure to include the pertinent -L flag among LDFLAGS, and to specify the path to libsymspg.so in your LD\_LIBRARY\_PATH environment variable. Finally, note that -lgfortran is needed when using gfortran.
 
 Once arch.make is ready, thirdorder\_core.py can be compiled simply by running make from the root directory of the distribution.
 
@@ -33,7 +33,7 @@ The first argument must be either "sow" or "reap", and chooses the operation to 
 
 # An example #
 
-The following POSCAR the relaxed geometry of the primitive unit cell of InAs, a III-V semiconductor with a zincblende structure:
+The following POSCAR describes the relaxed geometry of the primitive unit cell of InAs, a III-V semiconductor with a zincblende structure:
 
 ```
 InAs
@@ -54,7 +54,7 @@ Let us asuume that such POSCAR is in the current directory and that thirdorder.p
 thirdorder.py sow 4 4 4 -3
 ```
 
-This creates a file called 3RD.SPOSCAR with the undisplaced supercell coordinates and 144 files with names following the pattern 3RD.POSCAR.*. It is the latter that need to be input to VASP. This step is completely system-dependent, but suppose that in ~/vaspinputs we have the required INCAR, POTCAR and KPOINTS files as well as a script runvasp.sh that can be passed to qsub. We can run a command sequence like:
+This creates a file called 3RD.SPOSCAR with the undisplaced supercell coordinates and 144 files with names following the pattern 3RD.POSCAR.*. It is the latter that need to be input to VASP. This step is completely system-dependent, but suppose that in ~/vaspinputs we have the required INCAR, POTCAR and KPOINTS files as well as a runvasp.sh script that can be passed to qsub. We can run a command sequence like:
 
 ```bash
 for i in 3RD.POSCAR.*;do
