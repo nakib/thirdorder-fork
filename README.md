@@ -1,6 +1,6 @@
 # thirdorder #
 
-The purpose of thirdorder.py is to help users of [wlsBTE](https://www.bitbucket.org/sousaw/wlsBTE/) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks. First, it is able to obtain an irreducible  set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. thirdorder.py then saves the displaced supercells to POSCAR files that can be fed to VASP. Second, from the vasprun.xml files created by VASP from these inputs, this script reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
+The purpose of thirdorder.py is to help users of [wlsBTE](https://bitbucket.org/sousaw/wlsBTE/) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks. First, it is able to obtain an irreducible  set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. thirdorder.py then saves the displaced supercells to POSCAR files that can be fed to VASP. Second, from the vasprun.xml files created by VASP from these inputs, this script reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
 
 # Compilation #
 
