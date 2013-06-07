@@ -60,7 +60,7 @@ This creates a file called 3RD.SPOSCAR with the undisplaced supercell coordinate
 for i in 3RD.POSCAR.*;do
    s=$(echo $i|cut -d"." -f3)
    d=job-$s
-   cp $i $d/POSCAS
+   cp $i $d/POSCAR
    cp ~/vaspinputs/INCAR ~/vaspinputs/POTCAR ~/vaspinputs/KPOINTS $d
    cp ~/vaspinputs/runvasp.sh $d
    pushd $d
@@ -68,7 +68,7 @@ for i in 3RD.POSCAR.*;do
    popd
 ```
 
-Some time later, after all these jobs have finished successfully, we only need to feed all the vasprun.xml in the right order to thirdorder.py, this time in reap mode:
+Some time later, after all these jobs have finished successfully, we only need to feed all the vasprun.xml files in the right order to thirdorder.py, this time in reap mode:
 
 ```
 find job* -name vasprun.xml|sort -n|thirdorder.py reap 4 4 4 -3
