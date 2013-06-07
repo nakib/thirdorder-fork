@@ -66,6 +66,7 @@ for i in 3RD.POSCAR.*;do
    pushd $d
    qsub runvasp.sh
    popd
+done
 ```
 
 Some time later, after all these jobs have finished successfully, we only need to feed all the vasprun.xml files in the right order to thirdorder.py, this time in reap mode:
