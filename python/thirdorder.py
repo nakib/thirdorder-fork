@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
 #  Copyright (C) 2012-2013 Wu Li <wu.li@cea.fr>
