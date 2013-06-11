@@ -116,8 +116,8 @@ def read_POSCAR(directory):
     for i in range(len(nruter["numbers"])):
         nruter["types"]+=[i]*nruter["numbers"][i]
     if typeline[0]=="C":
-        nruter["positions"][:,i]=scipy.linalg.solve(nruter["lattvec"],
-                                                    nruter["positions"])
+        nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
+                                               nruter["positions"])
     return nruter
 
 
