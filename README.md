@@ -60,6 +60,7 @@ This creates a file called 3RD.SPOSCAR with the undisplaced supercell coordinate
 for i in 3RD.POSCAR.*;do
    s=$(echo $i|cut -d"." -f3)
    d=job-$s
+   mkdir $d
    cp $i $d/POSCAR
    cp ~/vaspinputs/INCAR ~/vaspinputs/POTCAR ~/vaspinputs/KPOINTS $d
    cp ~/vaspinputs/runvasp.sh $d
