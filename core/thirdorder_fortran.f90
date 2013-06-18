@@ -546,8 +546,7 @@ contains
        bind(C,name="cgaussian")
 
     integer(kind=C_INT),value,intent(in) :: row,column
-    integer(kind=C_INT),optional,intent(out) :: Ndependent,&
-         Nindependent
+    integer(kind=C_INT),intent(out) :: Ndependent,Nindependent
     type(c_ptr),value,intent(in) :: ca,cb,cIndexIndependent
 
     integer(kind=C_INT),pointer :: IndexIndependent(:)
