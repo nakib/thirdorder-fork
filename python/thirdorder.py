@@ -383,17 +383,17 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
         aa[rowindex,numpy.abs(aa[rowindex,:])<=1e-14]=0.
         aa[nnonzero,:ntotalindependent]=aa[rowindex,:ntotalindependent]
         nnonzero+=1
-    print "N",naccumindependent
-    print "LA",nnonzero,ntotalindependent
     aux=numpy.array(aa[:nnonzero,:ntotalindependent])
-    print aux.min(),aux.max()
     gaussianres=thirdorder_core.pygaussian(aux)
     aux=gaussianres["a"]
-    nnonzero=gaussianres["NIndependent"]
-    print "LE",nnonzero,gaussianres["Ndependent"]
+    nnonzero=gaussianres["Ndependent"]
+
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
     multiplier=-scipy.linalg.lstsq(bb,philist)[0]
     compensation=numpy.dot(bb,multiplier)
+    print "COMPENSATION"
+    print compensation
+    sys.exit(1)
     nruter[:,:,:,:,:,:]=0.
     for ii in range(wedgeres["Nlist"]):
         for jj in range(wedgeres["Nequi"][ii]):
