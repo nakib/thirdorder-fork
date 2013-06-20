@@ -533,7 +533,6 @@ if __name__=="__main__":
         phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
         phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
-        print "MM",phifull.max(),phifull.min()
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,frange,"FORCE_CONSTANTS_3RD")
     print doneblock
