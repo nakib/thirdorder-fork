@@ -606,7 +606,7 @@ if __name__=="__main__":
             for n in range(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
-                number=nirred*n+i+1
+                number=nirred*n+i
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
