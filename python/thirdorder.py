@@ -391,9 +391,6 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
     multiplier=-scipy.linalg.lstsq(bb,philist)[0]
     compensation=numpy.dot(bb,multiplier)
-    print "COMPENSATION"
-    print compensation
-    sys.exit(1)
     nruter[:,:,:,:,:,:]=0.
     for ii in range(wedgeres["Nlist"]):
         for jj in range(wedgeres["Nequi"][ii]):
@@ -615,6 +612,7 @@ if __name__=="__main__":
         phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
         phifull=reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        print "MM",phifull.max(),phifull.min()
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,frange,"FORCE_CONSTANTS_3RD")
     print doneblock
