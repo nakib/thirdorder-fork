@@ -215,11 +215,14 @@ def move_two_atoms(poscar,iat,icoord,ih,jat,jcoord,jh):
     jh nm along its jcoord-th Cartesian coordinate.
     """
     nruter=copy.deepcopy(poscar)
-    pos=numpy.dot(nruter["lattvec"],nruter["positions"][:,(iat,jat)])
-    pos[icoord,0]+=ih
-    pos[jcoord,1]+=jh
-    nruter["positions"][:,(iat,jat)]=scipy.linalg.solve(
-        nruter["lattvec"],pos)
+    disp=numpy.zeros(3)
+    disp[icoord]=ih
+    nruter["positions"][:,iat]+=scipy.linalg.solve(nruter["lattvec"],
+                                                   disp)
+    disp[:]=0.
+    disp[jcoord]=jh
+    nruter["positions"][:,jat]+=scipy.linalg.solve(nruter["lattvec"],
+                                                   disp)
     return nruter
 
 
@@ -559,15 +562,15 @@ if __name__=="__main__":
         print "Writing displaced coordinates to 3RD.POSCAR.*"
         for i,e in enumerate(list4):
             for n in range(4):
-                isign=(-1)**(n%2)
-                jsign=(-1)**(n//2)
+                isign=(-1)**(n//2)
+                jsign=-(-1)**(n%2)
                 # Start numbering the files at 1 for aesthetic
                 # reasons.
-                number=4*i+n+1
+                number=nirred*n+i+1
                 dsposcar=normalize_SPOSCAR(
                     move_two_atoms(sposcar,
-                                   e[0],e[2],isign*H,
-                                   e[1],e[3],jsign*H))
+                                   e[1],e[3],isign*H,
+                                   e[0],e[2],jsign*H))
                 filename=namepattern.format(number)
                 write_POSCAR(dsposcar,filename)
     else:
@@ -601,9 +604,9 @@ if __name__=="__main__":
         phipart=numpy.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
             for n in range(4):
-                isign=(-1)**(n%2)
-                jsign=(-1)**(n//2)
-                number=4*i+n
+                isign=(-1)**(n//2)
+                jsign=-(-1)**(n%2)
+                number=nirred*n+i+1
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
