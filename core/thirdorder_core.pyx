@@ -23,6 +23,7 @@ import numpy
 import scipy
 import scipy.linalg
 
+cimport cython
 cimport numpy
 numpy.import_array()
 cimport cthirdorder_core
@@ -277,4 +278,97 @@ def pygaussian(m):
     free(b)
     free(a)
     free(IndexIndependent)
+    return nruter
+
+@cython.boundscheck(False)
+def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
+    """
+    Recover the full anharmonic IFC matrix from the irreducible set of
+    force constants.
+    """
+    cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
+    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,rowindex
+    cdef numpy.ndarray nruter,naccumindependent,aa,ind1equi,ind2equi
+    cdef int[:,:,:] vind1
+    cdef int[:,:,:] vind2
+    cdef double[:,:] vaa
+    cdef double[:,:,:,:] doubletrans
+
+    nlist=wedgeres["Nlist"]
+    natoms=len(poscar["types"])
+    ntot=len(sposcar["types"])
+    nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
+    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"]),
+                                   0,[0])
+    ntotalindependent=naccumindependent[-1]
+    for i,e in enumerate(list4):
+        nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
+    philist=[]
+    for ii in range(nlist):
+        for jj in range(wedgeres["NIndependentBasis"][ii]):
+            ll=wedgeres["IndependentBasis"][jj,ii]//9
+            mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
+            nn=wedgeres["IndependentBasis"][jj,ii]%3
+            philist.append(nruter[ll,mm,nn,
+                                  wedgeres["List"][0,ii],
+                                  wedgeres["List"][1,ii],
+                                  wedgeres["List"][2,ii]])
+    philist=numpy.array(philist)
+    ind1equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    vind1=ind1equi
+    vind2=ind2equi
+    for ii in range(nlist):
+        for jj in range(wedgeres["Nequi"][ii]):
+            vind1[wedgeres["ALLEquiList"][0,jj,ii],
+                  wedgeres["ALLEquiList"][1,jj,ii],
+                  wedgeres["ALLEquiList"][2,jj,ii]]=ii
+            vind2[wedgeres["ALLEquiList"][0,jj,ii],
+                  wedgeres["ALLEquiList"][1,jj,ii],
+                  wedgeres["ALLEquiList"][2,jj,ii]]=jj
+    aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
+    vaa=aa
+    vtrans=wedgeres["TransformationArray"]
+    nnonzero=0
+    for ii in range(natoms):
+        for jj in range(ntot):
+            for ll in range(3):
+                for mm in range(3):
+                    for nn in range(3):
+                        tribasisindex=(ll*3+mm)*3+nn
+                        rowindex=(ii*natoms+jj)*27+tribasisindex
+                        for kk in range(ntot):
+                            for ix in range(nlist):
+                                if vind1[ii,jj,kk]==ix:
+                                    for ss in range(naccumindependent[ix],naccumindependent[ix+1]):
+                                        tt=ss-naccumindependent[ix]
+                                        vaa[rowindex,ss]+=vtrans[tribasisindex,tt,
+                                                                 vind2[ii,jj,kk],ix]
+                        vaa[nnonzero,:ntotalindependent]=vaa[rowindex,:ntotalindependent]
+                        nnonzero+=1
+    aa[numpy.abs(aa)<=1e-14]=0.
+    aux=numpy.array(aa[:nnonzero,:ntotalindependent])
+    gaussianres=pygaussian(aux)
+    aux=gaussianres["a"]
+    nnonzero=gaussianres["Ndependent"]
+
+    bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
+    multiplier=-scipy.linalg.lstsq(bb,philist)[0]
+    compensation=numpy.dot(bb,multiplier)
+    philist+=compensation
+
+    nruter[:,:,:,:,:,:]=0.
+    for ii in range(nlist):
+        for jj in range(wedgeres["Nequi"][ii]):
+            for ll in range(3):
+                for mm in range(3):
+                    for nn in range(3):
+                        tribasisindex=(ll*3+mm)*3+nn
+                        for ix in range(wedgeres["NIndependentBasis"][ii]):
+                            nruter[ll,mm,nn,wedgeres["ALLEquiList"][0,jj,ii],
+                                   wedgeres["ALLEquiList"][1,jj,ii],
+                                   wedgeres["ALLEquiList"][2,jj,ii]
+                                   ]+=wedgeres["TransformationArray"][
+                                       tribasisindex,ix,jj,ii]*philist[
+                                           naccumindependent[ii]+ix]
     return nruter

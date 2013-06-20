@@ -329,87 +329,6 @@ def build_unpermutation(sposcar):
     return indices.argsort().tolist()
 
 
-def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
-    """
-    Recover the full anharmonic IFC matrix from the irreducible set of
-    force constants.
-    """
-    natoms=len(poscar["types"])
-    ntot=len(sposcar["types"])
-    nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"]),
-                                   0,[0])
-    ntotalindependent=naccumindependent[-1]
-    for i,e in enumerate(list4):
-        nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
-    philist=[]
-    for ii in range(wedgeres["Nlist"]):
-        for jj in range(wedgeres["NIndependentBasis"][ii]):
-            ll=wedgeres["IndependentBasis"][jj,ii]//9
-            mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
-            nn=wedgeres["IndependentBasis"][jj,ii]%3
-            philist.append(nruter[ll,mm,nn,
-                                  wedgeres["List"][0,ii],
-                                  wedgeres["List"][1,ii],
-                                  wedgeres["List"][2,ii]])
-    philist=numpy.array(philist)
-    ind1equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    for ii in range(wedgeres["Nlist"]):
-        for jj in range(wedgeres["Nequi"][ii]):
-            ind1equi[wedgeres["ALLEquiList"][0,jj,ii],
-                     wedgeres["ALLEquiList"][1,jj,ii],
-                     wedgeres["ALLEquiList"][2,jj,ii]]=ii
-            ind2equi[wedgeres["ALLEquiList"][0,jj,ii],
-                     wedgeres["ALLEquiList"][1,jj,ii],
-                     wedgeres["ALLEquiList"][2,jj,ii]]=jj
-
-    aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
-    nnonzero=0
-    for ii,jj,ll,mm,nn in itertools.product(range(natoms),
-                                            range(ntot),
-                                            range(3),
-                                            range(3),
-                                            range(3)):
-        tribasisindex=(ll*3+mm)*3+nn
-        rowindex=(ii*natoms+jj)*27+tribasisindex
-        for kk,ix in itertools.product(range(ntot),
-                                       range(wedgeres["Nlist"])):
-            if ind1equi[ii,jj,kk]==ix:
-                aa[rowindex,naccumindependent[ix]:naccumindependent[ix+1]
-                   ]+=wedgeres["TransformationArray"][
-                       tribasisindex,:wedgeres["NIndependentBasis"][ix],
-                       ind2equi[ii,jj,kk],ix]
-        aa[rowindex,numpy.abs(aa[rowindex,:])<=1e-14]=0.
-        aa[nnonzero,:ntotalindependent]=aa[rowindex,:ntotalindependent]
-        nnonzero+=1
-    aux=numpy.array(aa[:nnonzero,:ntotalindependent])
-    gaussianres=thirdorder_core.pygaussian(aux)
-    aux=gaussianres["a"]
-    nnonzero=gaussianres["Ndependent"]
-
-    bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
-    multiplier=-scipy.linalg.lstsq(bb,philist)[0]
-    compensation=numpy.dot(bb,multiplier)
-    philist+=compensation
-    
-    nruter[:,:,:,:,:,:]=0.
-    for ii in range(wedgeres["Nlist"]):
-        for jj in range(wedgeres["Nequi"][ii]):
-            for ll,mm,nn in itertools.product(range(3),
-                                              range(3),
-                                              range(3)):
-                tribasisindex=(ll*3+mm)*3+nn
-                for ix in range(wedgeres["NIndependentBasis"][ii]):
-                    nruter[ll,mm,nn,wedgeres["ALLEquiList"][0,jj,ii],
-                           wedgeres["ALLEquiList"][1,jj,ii],
-                           wedgeres["ALLEquiList"][2,jj,ii]
-                           ]+=wedgeres["TransformationArray"][
-                               tribasisindex,ix,jj,ii]*philist[
-                                   naccumindependent[ii]+ix]
-    return nruter
-
-
 def write_ifcs(phifull,poscar,sposcar,frange,filename):
     """
     Write out the full anharmonic interatomic force constant matrix,
@@ -613,7 +532,7 @@ if __name__=="__main__":
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
         print "Reconstructing the full matrix"
-        phifull=reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
         print "MM",phifull.max(),phifull.min()
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,frange,"FORCE_CONSTANTS_3RD")
