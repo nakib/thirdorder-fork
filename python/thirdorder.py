@@ -353,8 +353,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                   wedgeres["List"][1,ii],
                                   wedgeres["List"][2,ii]])
     philist=numpy.array(philist)
-    ind1equi=numpy.zeros((natoms,ntot,ntot))
-    ind2equi=numpy.zeros((natoms,ntot,ntot))
+    ind1equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
     for ii in range(wedgeres["Nlist"]):
         for jj in range(wedgeres["Nequi"][ii]):
             ind1equi[wedgeres["ALLEquiList"][0,jj,ii],
@@ -363,9 +363,9 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
             ind2equi[wedgeres["ALLEquiList"][0,jj,ii],
                      wedgeres["ALLEquiList"][1,jj,ii],
                      wedgeres["ALLEquiList"][2,jj,ii]]=jj
+
     aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
     nnonzero=0
-    nonzerolist=[]
     for ii,jj,ll,mm,nn in itertools.product(range(natoms),
                                             range(ntot),
                                             range(3),
@@ -380,13 +380,17 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                    ]+=wedgeres["TransformationArray"][
                        tribasisindex,:wedgeres["NIndependentBasis"][ix],
                        ind2equi[ii,jj,kk],ix]
-        aa[rowindex,aa[rowindex,:]<=1e-14]=0.
+        aa[rowindex,numpy.abs(aa[rowindex,:])<=1e-14]=0.
         aa[nnonzero,:ntotalindependent]=aa[rowindex,:ntotalindependent]
         nnonzero+=1
+    print "N",naccumindependent
+    print "LA",nnonzero,ntotalindependent
     aux=numpy.array(aa[:nnonzero,:ntotalindependent])
+    print aux.min(),aux.max()
     gaussianres=thirdorder_core.pygaussian(aux)
     aux=gaussianres["a"]
     nnonzero=gaussianres["NIndependent"]
+    print "LE",nnonzero,gaussianres["Ndependent"]
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
     multiplier=-scipy.linalg.lstsq(bb,philist)[0]
     compensation=numpy.dot(bb,multiplier)
