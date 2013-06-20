@@ -546,7 +546,7 @@ contains
        bind(C,name="cgaussian")
 
     integer(kind=C_INT),value,intent(in) :: row,column
-    integer(kind=C_INT),intent(out) :: Ndependent,Nindependent
+    integer(kind=C_INT),intent(out) :: Ndependent,NIndependent
     type(c_ptr),value,intent(in) :: ca,cb,cIndexIndependent
 
     integer(kind=C_INT),pointer :: IndexIndependent(:)
@@ -564,7 +564,7 @@ contains
 
     real(kind=C_DOUBLE),parameter :: EPS=1.d-10
     integer(kind=C_INT),value,intent(in) :: row,column
-    integer(kind=C_INT),optional,intent(out) :: Ndependent,&
+    integer(kind=C_INT),intent(out) :: Ndependent,&
          Nindependent,IndexIndependent(column)
     real(kind=C_DOUBLE),intent(inout) :: a(row,column)
     real(kind=C_DOUBLE),intent(out) :: b(column,column)
