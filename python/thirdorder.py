@@ -391,6 +391,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
     multiplier=-scipy.linalg.lstsq(bb,philist)[0]
     compensation=numpy.dot(bb,multiplier)
+    philist+=compensation
+    
     nruter[:,:,:,:,:,:]=0.
     for ii in range(wedgeres["Nlist"]):
         for jj in range(wedgeres["Nequi"][ii]):
