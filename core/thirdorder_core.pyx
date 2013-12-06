@@ -16,6 +16,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# This file contains Cython wrappers allowing the relevant functions
+# in spglib and also around the Fortran subroutines in
+# thirdorder_core.f90 that need to be used from Python.
+# Finally, the the reconstruction of the anharmonic interatomic
+# constant set from the minimal set of constants is also implemented
+# in this file for efficiency.
+
 from libc.stdlib cimport malloc,free
 from libc.math cimport round,fabs,sqrt
 
@@ -163,7 +170,7 @@ cdef class SymmetryOperations:
 
 def pywedge(poscar,sposcar,symops,frange):
     """
-    Wrapper around wedge() thar returns a python dictionary with all
+    Wrapper around wedge() that returns a python dictionary with all
     relevant information about the irreducible displacements.
     """
     cdef double ForceRange
@@ -218,6 +225,10 @@ def pywedge(poscar,sposcar,symops,frange):
     free(Orth)
     free(CoordAll)
     free(Coord)
+    # The dictionary contains numpy arrays instead of the original
+    # low-level ones. The following fragment handles these
+    # assignations. One-based Fortran indices are converted to the
+    # C/Python zero-based convention.
     nruter=dict()
     nruter["Nlist"]=int(Nlist)
     nruter["Nequi"]=numpy.empty(Nlist,dtype=numpy.int32)
@@ -283,8 +294,8 @@ def pygaussian(m):
 @cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     """
-    Recover the full anharmonic IFC matrix from the irreducible set of
-    force constants.
+    Recover the full anharmonic IFC set from the irreducible set of
+    force constants and the information obtained from wedge().
     """
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
     cdef int nlist,nnonzero,natoms,ntot,tribasisindex,rowindex
@@ -352,11 +363,13 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     aux=gaussianres["a"]
     nnonzero=gaussianres["Ndependent"]
 
+    # Enforce translational symmetry.
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
     multiplier=-scipy.linalg.lstsq(bb,philist)[0]
     compensation=numpy.dot(bb,multiplier)
     philist+=compensation
 
+    # Build the final, full set of anharmonic IFCs.
     nruter[:,:,:,:,:,:]=0.
     for ii in range(nlist):
         for jj in range(wedgeres["Nequi"][ii]):
