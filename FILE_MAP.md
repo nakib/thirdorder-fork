@@ -29,10 +29,10 @@ In addition to the Fortran code contained in thirdorder\_fortran.f90, thirdorder
 
 * LICENSE: Copy of the GNU General Public License, version 3
 
-* Makefile: Set of recipes for building the Python module from Cython and Fortran code. Most of the work is actually performed by setup.py
+* Makefile: Set of make rules for building the Python module from Cython and Fortran code. Most of the work is actually performed by setup.py
 
 * arch.make.example: Machine-specific variables needed for the compilation. Must be copied to arch.make and customized appropriately
 
 * setup.py: Python distutils script needed to build the low-level module by calling the compiler, the linker and so on
 
-* FILE\_MAP.md: this file
+* FILE\_MAP.md: This file
