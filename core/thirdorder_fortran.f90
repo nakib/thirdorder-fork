@@ -28,7 +28,7 @@ module thirdorder_fortran
 
 contains
 
-  ! Determine a minimal set of third-order derivatives of te energy
+  ! Determine a minimal set of third-order derivatives of the energy
   ! needed to obtain all anharmonic IFCs withing the cutoff radius
   ! ForceRange. The description of the constants is returned in cList;
   ! the rest of the output arguments are necessary for the
@@ -107,10 +107,9 @@ contains
     shift2all=0
     shift3all=0
     ! Each atom in the unit cell (ii) and all atoms in the supercell
-    ! are considered, and the minimal distances between them computed
-    ! by taking into account the periodic boundary
-    ! conditions. Interactions within ForceRange are taken into
-    ! account.
+    ! (jj,kk) are considered, and the minimal distances between them
+    ! computed by taking into account the periodic boundary
+    ! conditions. Interactions outside ForceRange are ignored.
     do ii=1,Natoms
        do jj=1,Ngrid1*Ngrid2*Ngrid3*Natoms
           dist_min=huge(dist)
@@ -451,7 +450,7 @@ contains
   end subroutine free_wedge
 
   ! Each symmetry operation defines a mapping between atom indices in
-  ! the supercell. This subroutine fills a matrix wih those
+  ! the supercell. This subroutine fills a matrix with those
   ! permutations.
   subroutine symmetry(Nsymm,Natoms,LatVec,Coord,ID_equi,&
        Ngrid1,Ngrid2,Ngrid3,Orth,Trans)
@@ -484,7 +483,7 @@ contains
     end do
   end subroutine symmetry
 
-  ! Apply a symmetry operation to a vector and return te result.
+  ! Apply a symmetry operation to a vector and return the result.
   subroutine symm(Nsymm,LatVec,r_in,r_out,Orth,Trans)
     implicit none
 
