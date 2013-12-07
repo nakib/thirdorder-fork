@@ -16,12 +16,24 @@
 !  You should have received a copy of the GNU General Public License
 !  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+! The computationally intensive parts of the algorithm are implemented here.
+! wedge() is the core of this file, but the subroutine gaussian() is
+! also used from outside.
+! Note that explicitly C-compatible types are used. This is critical to avoid
+! crashes with some {architecture/C compiler/Fortran compiler} combinations.
+
 module thirdorder_fortran
   use iso_c_binding
   implicit none
 
 contains
 
+  ! Determine a minimal set of third-order derivatives of the energy
+  ! needed to obtain all anharmonic IFCs withing the cutoff radius
+  ! ForceRange. The description of the constants is returned in cList;
+  ! the rest of the output arguments are necessary for the
+  ! reconstruction since they describe the equivalences and
+  ! transformation rules between atomic triplets.
   subroutine wedge(LatVec,Coord,CoordAll,Orth,Trans,Natoms,Nlist,cNequi,cList,&
        cALLEquiList,cTransformationArray,cNIndependentBasis,&
        cIndependentBasis,Ngrid1,Ngrid2,Ngrid3,Nsymm,&
@@ -86,12 +98,18 @@ contains
     summ=0
     TransformationArray=0.d0
 
+    ! Symmetry operations are applied to the set of atomic positions
+    ! to determine which is mapped into which by each operation.
     call symmetry(Nsymm,Natoms,LatVec,Coord,ID_equi,&
          Ngrid1,Ngrid2,Ngrid3,Orth,Trans)
     call Id2Ind(Ind_cell,Ind_species,Ngrid1,Ngrid2,Ngrid3,Natoms)
 
     shift2all=0
     shift3all=0
+    ! Each atom in the unit cell (ii) and all atoms in the supercell
+    ! (jj,kk) are considered, and the minimal distances between them
+    ! computed by taking into account the periodic boundary
+    ! conditions. Interactions outside ForceRange are ignored.
     do ii=1,Natoms
        do jj=1,Ngrid1*Ngrid2*Ngrid3*Natoms
           dist_min=huge(dist)
@@ -175,6 +193,14 @@ contains
                 end do
                 dist1=dist_min
                 if(dist.lt.ForceRange.and.dist1.lt.ForceRange) then
+                   ! Atomic triplets are grouped into equivalence
+                   ! classes.  Then, the equality of mixed partials
+                   ! and point-group symmetries are used to derive
+                   ! linear constraints over the anharmonic IFCs of
+                   ! one triplet from each class. Finally, Gaussian
+                   ! elimination is used, both to extract an
+                   ! irreducible subset of constants and to compute
+                   ! the matrices linking them to the remaining ones.
                    summ=summ+1
                    iaux=1
                    triplet=(/ii,jj,kk/)
@@ -388,6 +414,8 @@ contains
     deallocate(Transformation)
     deallocate(TransformationAux)
     deallocate(AllList)
+    ! The memory used by the Fortran vectors must be assigned to
+    ! the equivalent C pointers before finishing.
     cNequi=c_loc(Nequi(1))
     cList=c_loc(List(1,1))
     cALLEquiList=c_loc(ALLEquiList(1,1,1))
@@ -396,6 +424,7 @@ contains
     cIndependentBasis=c_loc(IndependentBasis(1,1))
   end subroutine wedge
 
+  ! Free the memory space used by the results of wedge().
   subroutine free_wedge(Allocsize,Nsymm,cNequi,cList,cALLEquiList,&
        cTransformationArray,cNIndependentBasis,&
        cIndependentBasis) bind(C,name="free_wedge")
@@ -420,6 +449,9 @@ contains
          shape=[27,Allocsize])
   end subroutine free_wedge
 
+  ! Each symmetry operation defines a mapping between atom indices in
+  ! the supercell. This subroutine fills a matrix with those
+  ! permutations.
   subroutine symmetry(Nsymm,Natoms,LatVec,Coord,ID_equi,&
        Ngrid1,Ngrid2,Ngrid3,Orth,Trans)
     implicit none
@@ -451,6 +483,7 @@ contains
     end do
   end subroutine symmetry
 
+  ! Apply a symmetry operation to a vector and return the result.
   subroutine symm(Nsymm,LatVec,r_in,r_out,Orth,Trans)
     implicit none
 
@@ -468,6 +501,8 @@ contains
     end do
   end subroutine symm
 
+  ! Return the unit cell and atom indices of an element of the
+  ! supercell based on its Cartesian coordinates.
   subroutine Car2Lattice(Natoms,LatVec,Coord,Ind_cell,Ind_atom,Car)
     implicit none
 
@@ -496,6 +531,8 @@ contains
     end do
   end subroutine Car2Lattice
 
+  ! Inverse of the previous subroutine: converts from atom+cell
+  ! indices to Cartesian coordinates.
   subroutine Lattice2Car(Natom,LatVec,Coord,Ind_cell,Ind_atom,Car)
     implicit none
 
@@ -513,6 +550,8 @@ contains
     end do
   end subroutine Lattice2Car
 
+  ! Generate a mapping between unit cell+atom indices to atom indices
+  ! in the supercell.
   subroutine Id2Ind(Ind_cell,Ind_species,Ngrid1,Ngrid2,Ngrid3,Nspecies)
     implicit none
 
@@ -534,6 +573,7 @@ contains
     end do
   end subroutine Id2Ind
 
+  ! Split an atom index from the supercell into a set of cell+atom indices.
   integer(kind=C_INT) function Ind2Id(Ind_cell,Ind_species,Ngrid1,Ngrid2,Nspecies)
     implicit none
 
@@ -542,6 +582,7 @@ contains
     Ind2Id=(Ind_cell(1)+(Ind_cell(2)+Ind_cell(3)*Ngrid2)*Ngrid1)*Nspecies+Ind_species
   end function Ind2Id
 
+  ! Thin wrapper around gaussian() to ensure interoperability with C.
   subroutine cgaussian(ca,row,column,Ndependent,cb,NIndependent,cIndexIndependent)&
        bind(C,name="cgaussian")
 
@@ -559,6 +600,9 @@ contains
     call gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
   end subroutine cgaussian
 
+  ! Routine to perform Gaussian elimination. Used by wedge() to
+  ! extract subsets of independent constants given overdetermined sets
+  ! of linear constraints.
   subroutine gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
     implicit none
 
