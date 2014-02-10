@@ -440,7 +440,7 @@ contains
 
     integer(kind=C_INT),pointer :: Nequi(:),List(:,:),ALLEquiList(:,:,:)
     integer(kind=C_INT),pointer :: NIndependentBasis(:),IndependentBasis(:,:)
-    real(kind=C_DOUBLE),pointer :: TransformationArray(:,:)
+    real(kind=C_DOUBLE),pointer :: TransformationArray(:,:,:,:)
 
     call c_f_pointer(cNequi,Nequi,shape=[Allocsize])
     call c_f_pointer(cList,List,shape=[3,Allocsize])
