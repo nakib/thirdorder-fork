@@ -233,13 +233,13 @@ def write_POSCAR(poscar,filename):
     f=open(filename,"w")
     f.write("{}\n1.0\n".format(filename))
     for i in range(3):
-        f.write("{0[0]:>20.10e} {0[1]:>20.10e} {0[2]:>20.10e}\n".format(
+        f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             (poscar["lattvec"][:,i]*10.).tolist()))
     f.write("{}\n".format(" ".join(poscar["elements"])))
     f.write("{}\n".format(" ".join([str(i) for i in poscar["numbers"]])))
     f.write("Direct\n")
     for i in range(poscar["positions"].shape[1]):
-        f.write("{0[0]:>20.10e} {0[1]:>20.10e} {0[2]:>20.10e}\n".format(
+        f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             poscar["positions"][:,i].tolist()))
     f.close()
 
