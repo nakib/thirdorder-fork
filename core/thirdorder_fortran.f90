@@ -48,7 +48,8 @@ contains
     type(C_PTR),intent(out) :: cNequi,cList,cALLEquiList,&
          cTransformationArray,cNindependentBasis,cIndependentBasis
 
-    integer(kind=C_INT) :: AllAllocsize,NAllList,Nnonzero,EquiList(3,Nsymm*6)
+    integer(kind=C_INT) :: AllAllocsize,Newsize
+    integer(kind=C_INT) :: NAllList,Nnonzero,EquiList(3,Nsymm*6)
     integer(kind=C_INT),allocatable,target,save :: Nequi(:),ALLEquiList(:,:,:),&
          NIndependentBasis(:),IndependentBasis(:,:),List(:,:)
     integer(kind=C_INT),allocatable :: AllList(:,:)
@@ -77,8 +78,8 @@ contains
 
     real(kind=C_DOUBLE) :: dnrm2
 
-    Allocsize=64
-    AllAllocsize=256
+    Allocsize=4
+    AllAllocsize=4
 
     allocate(Nequi(Allocsize))
     allocate(AllEquiList(3,Nsymm*6,Allocsize))
@@ -214,14 +215,15 @@ contains
                    if (iaux.eq.1) then
                       Nlist=Nlist+1
                       if (Nlist.gt.Allocsize) then
-                         allocate(Nequi2(2*Allocsize))
-                         allocate(AllEquiList2(3,Nsymm*6,2*Allocsize))
-                         allocate(TransformationArray2(27,27,Nsymm*6,2*Allocsize))
-                         allocate(Transformation2(27,27,Nsymm*6,2*Allocsize))
+                         NewSize=(Allocsize+1)+ishft(Allocsize+1,-3)+merge(3,6,Allocsize<8)
+                         allocate(Nequi2(Newsize))
+                         allocate(AllEquiList2(3,Nsymm*6,Newsize))
+                         allocate(TransformationArray2(27,27,Nsymm*6,Newsize))
+                         allocate(Transformation2(27,27,Nsymm*6,Newsize))
                          allocate(TransformationAux2(27,27,2*AllocSize))
                          allocate(NIndependentBasis2(2*AllocSize))
-                         allocate(IndependentBasis2(27,2*Allocsize))
-                         allocate(List2(3,2*Allocsize))
+                         allocate(IndependentBasis2(27,Newsize))
+                         allocate(List2(3,Newsize))
                          Nequi2(1:Allocsize)=Nequi(1:Allocsize)
                          AllEquiList2(:,:,1:AllocSize)=AllEquiList(:,:,1:AllocSize)
                          TransformationArray2(:,:,:,1:Allocsize)=TransformationArray(:,:,:,1:Allocsize)
@@ -238,7 +240,7 @@ contains
                          call move_alloc(NIndependentBasis2,NIndependentBasis)
                          call move_alloc(IndependentBasis2,IndependentBasis)
                          call move_alloc(List2,List)
-                         Allocsize=Allocsize*2
+                         Allocsize=Newsize
                       end if
                       List(:,Nlist)=(/ii,jj,kk/)
                       Nequi(Nlist)=0
@@ -354,10 +356,12 @@ contains
                                   ALLEquiList(:,Nequi(Nlist),Nlist)=triplet_sym
                                   NAllList=NAllList+1
                                   if(NAllList.ge.AllAllocsize) then
-                                     allocate(AllList2(3,2*AllAllocsize))
+                                     NewSize=(AllAllocsize+1)+ishft(AllAllocsize+1,-3)+&
+                                          merge(3,6,AllAllocsize<8)
+                                     allocate(AllList2(3,Newsize))
                                      AllList2(:,1:AllAllocsize)=AllList(:,1:AllAllocsize)
                                      call move_alloc(AllList2,AllList)
-                                     AllAllocsize=2*AllAllocsize
+                                     AllAllocsize=Newsize
                                   end if
                                   AllList(:,NAllList)=triplet_sym
                                   Transformation(:,:,Nequi(Nlist),NList)=BB

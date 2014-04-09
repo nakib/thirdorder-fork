@@ -365,9 +365,17 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
 
     # Enforce translational symmetry.
     bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
-    multiplier=-scipy.linalg.lstsq(bb,philist)[0]
-    compensation=numpy.dot(bb,multiplier)
+    # multiplier=-scipy.linalg.lstsq(bb,philist)[0]
+    # compensation=numpy.dot(bb,multiplier)
+    # philist+=compensation
+
+    D=numpy.diag(philist)
+    ones=numpy.ones_like(philist)
+    bb=numpy.dot(D,bb)
+    multiplier=-scipy.linalg.lstsq(bb,ones)[0]
+    compensation=numpy.dot(D,numpy.dot(bb,multiplier))
     philist+=compensation
+
 
     # Build the final, full set of anharmonic IFCs.
     nruter[:,:,:,:,:,:]=0.
