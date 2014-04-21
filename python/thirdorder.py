@@ -28,6 +28,15 @@ import itertools
 import contextlib
 import collections
 import xml.etree.cElementTree as ElementTree
+try:
+    import cStringIO as StringIO
+except ImportError:
+    import StringIO
+try:
+    import hashlib
+    hashes=True
+except ImportError:
+    hashes=False
 import numpy
 import scipy
 import scipy.linalg
@@ -230,8 +239,9 @@ def write_POSCAR(poscar,filename):
     """
     Write the contents of poscar to filename.
     """
-    f=open(filename,"w")
-    f.write("{}\n1.0\n".format(filename))
+    global hashes
+    f=StringIO.StringIO()
+    f.write("1.0\n".format(filename))
     for i in range(3):
         f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             (poscar["lattvec"][:,i]*10.).tolist()))
@@ -241,6 +251,13 @@ def write_POSCAR(poscar,filename):
     for i in range(poscar["positions"].shape[1]):
         f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             poscar["positions"][:,i].tolist()))
+    if hashes:
+        header=hashlib.sha1(f.getvalue()).hexdigest()
+    else:
+        header=filename
+    with open(filename,"w") as finalf:
+        finalf.write("{}\n".format(header))
+        finalf.write(f.getvalue())
     f.close()
 
 
