@@ -17,8 +17,7 @@
 !  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ! The computationally intensive parts of the algorithm are implemented here.
-! wedge() is the core of this file, but the subroutine gaussian() is
-! also used from outside.
+! wedge() is the core of this file.
 ! Note that explicitly C-compatible types are used. This is critical to avoid
 ! crashes with some {architecture/C compiler/Fortran compiler} combinations.
 
