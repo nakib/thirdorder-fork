@@ -586,23 +586,6 @@ contains
     Ind2Id=(Ind_cell(1)+(Ind_cell(2)+Ind_cell(3)*Ngrid2)*Ngrid1)*Nspecies+Ind_species
   end function Ind2Id
 
-  ! Thin wrapper around gaussian() to ensure interoperability with C.
-  subroutine cgaussian(ca,row,column,Ndependent,cb,NIndependent,cIndexIndependent)&
-       bind(C,name="cgaussian")
-
-    integer(kind=C_INT),value,intent(in) :: row,column
-    integer(kind=C_INT),intent(out) :: Ndependent,NIndependent
-    type(c_ptr),value,intent(in) :: ca,cb,cIndexIndependent
-
-    integer(kind=C_INT),pointer :: IndexIndependent(:)
-    real(kind=C_DOUBLE),pointer :: a(:,:),b(:,:)
-
-    call c_f_pointer(ca,a,shape=[row,column])
-    call c_f_pointer(cb,b,shape=[column,column])
-    call c_f_pointer(cIndexIndependent,IndexIndependent,&
-         shape=[column])
-    call gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
-  end subroutine cgaussian
 
   ! Routine to perform Gaussian elimination. Used by wedge() to
   ! extract subsets of independent constants given overdetermined sets
