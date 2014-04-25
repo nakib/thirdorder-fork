@@ -24,11 +24,14 @@
 # in this file for efficiency.
 
 from libc.stdlib cimport malloc,free
-from libc.math cimport round,fabs,sqrt
+from libc.math cimport round,fabs,sqrt,ceil
 
+import sys
 import numpy
 import scipy
 import scipy.linalg
+import scipy.sparse
+import scipy.sparse.linalg
 
 cimport cython
 cimport numpy
@@ -261,8 +264,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     force constants and the information obtained from wedge().
     """
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
-    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex
-    cdef numpy.ndarray nruter,naccumindependent,aa,bb,ind1equi,ind2equi
+    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex,nrows,ncols
+    cdef numpy.ndarray nruter,naccumindependent,ind1equi,ind2equi
     cdef numpy.ndarray Q,R,P,ones,multiplier,compensation,aphilist
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
@@ -303,39 +306,86 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                   wedgeres["ALLEquiList"][1,jj,ii],
                   wedgeres["ALLEquiList"][2,jj,ii]]=jj
 
-
-    aa=numpy.zeros((ntotalindependent,natoms*ntot*27))
-    vaa=aa
     vtrans=wedgeres["TransformationArray"]
-    nnonzero=0
-    for ii in xrange(natoms):
-        for jj in xrange(ntot):
-            tribasisindex=0
-            for ll in xrange(3):
-                for mm in xrange(3):
-                    for nn in xrange(3):
-                        colindex=(ii*natoms+jj)*27+tribasisindex
-                        for kk in xrange(ntot):
-                            for ix in xrange(nlist):
-                                if vind1[ii,jj,kk]==ix:
-                                    for ss in xrange(naccumindependent[ix],
-                                                     naccumindependent[ix+1]):
-                                        tt=ss-naccumindependent[ix]
-                                        vaa[ss,colindex]+=vtrans[tribasisindex,tt,
-                                                                 vind2[ii,jj,kk],ix]
-                        vaa[:,nnonzero]=vaa[:,colindex]
-                        tribasisindex+=1
-                        nnonzero+=1
 
-    Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
-    nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
+    nrows=ntotalindependent
+    ncols=natoms*ntot*27
 
-    bb=numpy.array(Q[:,:nnonzero])
-    D=numpy.diag(aphilist)
-    ones=numpy.ones_like(aphilist)
-    bb=numpy.dot(D,bb)
-    multiplier=-scipy.linalg.lstsq(bb,ones)[0]
-    compensation=numpy.dot(D,numpy.dot(bb,multiplier))
+    if nrows>=ncols:
+        print "- Using a dense QR factorization algorithm"
+        aa=numpy.zeros((nrows,ncols))
+        vaa=aa
+        nnonzero=0
+        for ii in xrange(natoms):
+            for jj in xrange(ntot):
+                tribasisindex=0
+                for ll in xrange(3):
+                    for mm in xrange(3):
+                        for nn in xrange(3):
+                            colindex=(ii*natoms+jj)*27+tribasisindex
+                            for kk in xrange(ntot):
+                                for ix in xrange(nlist):
+                                    if vind1[ii,jj,kk]==ix:
+                                        for ss in xrange(naccumindependent[ix],
+                                                         naccumindependent[ix+1]):
+                                            tt=ss-naccumindependent[ix]
+                                            vaa[ss,colindex]+=vtrans[tribasisindex,tt,
+                                                                     vind2[ii,jj,kk],ix]
+                            vaa[:,nnonzero]=vaa[:,colindex]
+                            tribasisindex+=1
+                            nnonzero+=1
+        Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
+        nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
+        bb=numpy.array(Q[:,:nnonzero])
+        D=numpy.diag(aphilist)
+        ones=numpy.ones_like(aphilist)
+        bb=numpy.dot(D,bb)
+        multiplier=-scipy.linalg.lstsq(bb,ones)[0]
+        compensation=numpy.dot(D,numpy.dot(bb,multiplier))
+    else:
+        print "- Using a sparse least-squares method"
+        i=[]
+        j=[]
+        v=[]
+        nnonzero=0
+        for ii in xrange(natoms):
+            for jj in xrange(ntot):
+                tribasisindex=0
+                for ll in xrange(3):
+                    for mm in xrange(3):
+                        for nn in xrange(3):
+                            colindex=(ii*natoms+jj)*27+tribasisindex
+                            for kk in xrange(ntot):
+                                for ix in xrange(nlist):
+                                    if vind1[ii,jj,kk]==ix:
+                                        for ss in xrange(naccumindependent[ix],
+                                                         naccumindependent[ix+1]):
+                                            tt=ss-naccumindependent[ix]
+                                            i.append(ss)
+                                            j.append(colindex)
+                                            v.append(vtrans[tribasisindex,tt,
+                                                            vind2[ii,jj,kk],ix])
+                            # This part can be really slow.
+                            # if nnonzero!=colindex and colindex in j:
+                            #     for kk in xrange(j.index(colindex),len(j)):
+                            #         if j[kk]!=colindex:
+                            #             break
+                            #         i.append(i[kk])
+                            #         j.append(nnonzero)
+                            #         v.append(v[kk])
+                            tribasisindex+=1
+                            nnonzero+=1
+        aa=scipy.sparse.coo_matrix((v,(i,j)),shape=(nrows,ncols)).tocsr()
+        print "Nonzero fraction",aa.nnz/float(nrows*ncols)
+        sys.stdout.flush()
+        D=scipy.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
+                               format="csr")
+        bbs=D.dot(aa)
+        ones=numpy.ones_like(aphilist)
+        multiplier=-scipy.sparse.linalg.lsqr(bbs,ones)[0]
+        compensation=D.dot(bbs.dot(multiplier))
+        sys.exit("NOT FULLY IMPLEMENTED YET")
+
     aphilist+=compensation
 
     # Build the final, full set of anharmonic IFCs.

@@ -411,7 +411,7 @@ if __name__=="__main__":
     print "Reading POSCAR"
     poscar=read_POSCAR(".")
     natoms=len(poscar["types"])
-    print "Analyzing symmetries"
+    print "Analyzing the symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
         poscar["positions"].T)
