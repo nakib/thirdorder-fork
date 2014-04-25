@@ -307,13 +307,14 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     aa=numpy.zeros((ntotalindependent,natoms*ntot*27))
     vaa=aa
     vtrans=wedgeres["TransformationArray"]
-    colindex=0
+    nnonzero=0
     for ii in xrange(natoms):
         for jj in xrange(ntot):
             tribasisindex=0
             for ll in xrange(3):
                 for mm in xrange(3):
                     for nn in xrange(3):
+                        colindex=(ii*natoms+jj)*27+tribasisindex
                         for kk in xrange(ntot):
                             for ix in xrange(nlist):
                                 if vind1[ii,jj,kk]==ix:
@@ -321,8 +322,10 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                         tt=ss-naccumindependent[ix]
                                         vaa[ss,colindex]+=vtrans[tribasisindex,tt,
                                                                  vind2[ii,jj,kk],ix]
+                        vaa[:,nnonzero]=vaa[:,colindex]
                         tribasisindex+=1
-                        colindex+=1
+                        nnonzero+=1
+    aa=aa[:,:nnonzero]
 
     Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
     nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
