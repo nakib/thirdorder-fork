@@ -322,7 +322,6 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                                                  vind2[ii,jj,kk],ix]
                         vaa[nnonzero,:]=vaa[rowindex,:]
                         nnonzero+=1
-    aa[numpy.abs(aa)<=1e-14]=0.
     aux=aa[:nnonzero,:].T
 
     Q,R,P=scipy.linalg.qr(aux,mode="economic",pivoting=True)
