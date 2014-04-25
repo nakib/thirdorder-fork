@@ -318,14 +318,14 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                         for kk in xrange(ntot):
                             for ix in xrange(nlist):
                                 if vind1[ii,jj,kk]==ix:
-                                    for ss in xrange(naccumindependent[ix],naccumindependent[ix+1]):
+                                    for ss in xrange(naccumindependent[ix],
+                                                     naccumindependent[ix+1]):
                                         tt=ss-naccumindependent[ix]
                                         vaa[ss,colindex]+=vtrans[tribasisindex,tt,
                                                                  vind2[ii,jj,kk],ix]
                         vaa[:,nnonzero]=vaa[:,colindex]
                         tribasisindex+=1
                         nnonzero+=1
-    aa=aa[:,:nnonzero]
 
     Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
     nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
