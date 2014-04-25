@@ -261,8 +261,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     force constants and the information obtained from wedge().
     """
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
-    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,rowindex
-    cdef numpy.ndarray nruter,naccumindependent,aa,bb,aux,ind1equi,ind2equi
+    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex
+    cdef numpy.ndarray nruter,naccumindependent,aa,bb,ind1equi,ind2equi
     cdef numpy.ndarray Q,R,P,ones,multiplier,compensation,aphilist
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
@@ -302,29 +302,29 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
             vind2[wedgeres["ALLEquiList"][0,jj,ii],
                   wedgeres["ALLEquiList"][1,jj,ii],
                   wedgeres["ALLEquiList"][2,jj,ii]]=jj
-    aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
+
+
+    aa=numpy.zeros((ntotalindependent,natoms*ntot*27))
     vaa=aa
     vtrans=wedgeres["TransformationArray"]
-    nnonzero=0
+    colindex=0
     for ii in xrange(natoms):
         for jj in xrange(ntot):
+            tribasisindex=0
             for ll in xrange(3):
                 for mm in xrange(3):
                     for nn in xrange(3):
-                        tribasisindex=(ll*3+mm)*3+nn
-                        rowindex=(ii*natoms+jj)*27+tribasisindex
                         for kk in xrange(ntot):
                             for ix in xrange(nlist):
                                 if vind1[ii,jj,kk]==ix:
                                     for ss in xrange(naccumindependent[ix],naccumindependent[ix+1]):
                                         tt=ss-naccumindependent[ix]
-                                        vaa[rowindex,ss]+=vtrans[tribasisindex,tt,
+                                        vaa[ss,colindex]+=vtrans[tribasisindex,tt,
                                                                  vind2[ii,jj,kk],ix]
-                        vaa[nnonzero,:]=vaa[rowindex,:]
-                        nnonzero+=1
-    aux=aa[:nnonzero,:].T
+                        tribasisindex+=1
+                        colindex+=1
 
-    Q,R,P=scipy.linalg.qr(aux,mode="economic",pivoting=True)
+    Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
     nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
 
     bb=numpy.array(Q[:,:nnonzero])
