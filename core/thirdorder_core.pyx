@@ -178,10 +178,17 @@ def pywedge(poscar,sposcar,symops,frange):
     """
     cdef double ForceRange
     cdef int Ngrid1,Ngrid2,Ngrid3,Nsymm,Natoms,Ntot,Nlist,Allocsize
-    cdef double LatVec[3][3],(*Coord)[3],(*CoordAll)[3]
-    cdef double (*Orth)[3][3],(*Trans)[3]
-    cdef void *vNequi,*vList,*vALLEquiList,*vTransformationArray
-    cdef void *vNIndependentBasis,*vIndependentBasis
+    cdef double LatVec[3][3],
+    cdef double (*Coord)[3]
+    cdef double (*CoordAll)[3]
+    cdef double (*Orth)[3][3]
+    cdef double (*Trans)[3]
+    cdef void *vNequi
+    cdef void *vList
+    cdef void *vALLEquiList
+    cdef void *vTransformationArray
+    cdef void *vNIndependentBasis
+    cdef void *vIndependentBasis
     cdef int i,j,k
 
     crotations=numpy.empty_like(symops.rotations)
