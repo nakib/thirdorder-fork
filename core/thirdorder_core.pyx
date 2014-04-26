@@ -364,7 +364,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                                             vind2[ii,jj,kk],ix])
                             tribasisindex+=1
                             colindex+=1
-        print "- Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
+        print "- \t Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
         sys.stdout.flush()
         aa=scipy.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
         D=scipy.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,

@@ -26,7 +26,16 @@ import glob
 import itertools
 import contextlib
 import collections
-import xml.etree.cElementTree as ElementTree
+try:
+    from lxml import etree as ElementTree
+    xmllib="lxml.etree"
+except ImportError:
+    try:
+        import xml.etree.cElementTree as ElementTree
+        xmllib="cElementTree"
+    except ImportError:
+        import xml.etree.ElementTree as ElementTree
+        xmllib="cElementTree"
 try:
     import cStringIO as StringIO
 except ImportError:
@@ -456,6 +465,7 @@ if __name__=="__main__":
                 write_POSCAR(dsposcar,filename)
     else:
         print reapblock
+        print "XML ElementTree implementation: {}".format(xmllib)
         print "Waiting for a list of vasprun.xml files on stdin"
         filelist=[]
         for l in sys.stdin:
@@ -478,7 +488,7 @@ if __name__=="__main__":
         for i in filelist:
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
-            res=forces[-1].sum(axis=0)
+            res=forces[-1].mean(axis=0)
             print "- \t Average residual force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
@@ -490,7 +500,7 @@ if __name__=="__main__":
                 number=nirred*n+i
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
-        print "Reconstructing the full matrix"
+        print "Reconstructing the full array"
         phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
