@@ -45,7 +45,7 @@ import thirdorder_core
 
 
 H=2.116709e-3  # Magnitude of the finite displacements, in nm.
-
+SYMPREC=1e-5 # Tolerance for symmetry search
 
 sowblock="""
 .d88888b   .88888.  dP   dP   dP
@@ -414,7 +414,7 @@ if __name__=="__main__":
     print "Analyzing the symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
-        poscar["positions"].T)
+        poscar["positions"].T,SYMPREC)
     print "- Symmetry group {} detected".format(symops.symbol)
     print "- {} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
