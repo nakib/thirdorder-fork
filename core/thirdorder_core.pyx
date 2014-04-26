@@ -315,14 +315,13 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
         print "- Using a dense QR factorization algorithm"
         aa=numpy.zeros((nrows,ncols))
         vaa=aa
-        nnonzero=0
+        colindex=0
         for ii in xrange(natoms):
             for jj in xrange(ntot):
                 tribasisindex=0
                 for ll in xrange(3):
                     for mm in xrange(3):
                         for nn in xrange(3):
-                            colindex=(ii*natoms+jj)*27+tribasisindex
                             for kk in xrange(ntot):
                                 for ix in xrange(nlist):
                                     if vind1[ii,jj,kk]==ix:
@@ -331,9 +330,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                             tt=ss-naccumindependent[ix]
                                             vaa[ss,colindex]+=vtrans[tribasisindex,tt,
                                                                      vind2[ii,jj,kk],ix]
-                            vaa[:,nnonzero]=vaa[:,colindex]
                             tribasisindex+=1
-                            nnonzero+=1
+                            colindex+=1
         Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
         nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
         bb=numpy.array(Q[:,:nnonzero])
@@ -347,14 +345,13 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
         i=[]
         j=[]
         v=[]
-        nnonzero=0
+        colindex=0
         for ii in xrange(natoms):
             for jj in xrange(ntot):
                 tribasisindex=0
                 for ll in xrange(3):
                     for mm in xrange(3):
                         for nn in xrange(3):
-                            colindex=(ii*natoms+jj)*27+tribasisindex
                             for kk in xrange(ntot):
                                 for ix in xrange(nlist):
                                     if vind1[ii,jj,kk]==ix:
@@ -365,26 +362,17 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                             j.append(colindex)
                                             v.append(vtrans[tribasisindex,tt,
                                                             vind2[ii,jj,kk],ix])
-                            # This part can be really slow.
-                            # if nnonzero!=colindex and colindex in j:
-                            #     for kk in xrange(j.index(colindex),len(j)):
-                            #         if j[kk]!=colindex:
-                            #             break
-                            #         i.append(i[kk])
-                            #         j.append(nnonzero)
-                            #         v.append(v[kk])
                             tribasisindex+=1
-                            nnonzero+=1
-        aa=scipy.sparse.coo_matrix((v,(i,j)),shape=(nrows,ncols)).tocsr()
-        print "Nonzero fraction",aa.nnz/float(nrows*ncols)
+                            colindex+=1
+        print "- Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
         sys.stdout.flush()
+        aa=scipy.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
         D=scipy.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
                                format="csr")
         bbs=D.dot(aa)
         ones=numpy.ones_like(aphilist)
         multiplier=-scipy.sparse.linalg.lsqr(bbs,ones)[0]
         compensation=D.dot(bbs.dot(multiplier))
-        sys.exit("NOT FULLY IMPLEMENTED YET")
 
     aphilist+=compensation
 
