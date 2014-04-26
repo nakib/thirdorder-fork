@@ -40,7 +40,7 @@ cimport cthirdorder_core
 # NOTE: all indices used in this module are zero-based.
 
 # Maximum matrix size (rows*cols) for the dense method.
-cdef int MAXDENSE=33554432
+DEF MAXDENSE=33554432
 
 # Thin, specialized wrapper around spglib.
 cdef class SymmetryOperations:
@@ -274,39 +274,39 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     """
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
     cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex,nrows,ncols
-    cdef numpy.ndarray nruter,naccumindependent,ind1equi,ind2equi
-    cdef numpy.ndarray Q,R,P,ones,multiplier,compensation,aphilist
+    cdef int[:] naccumindependent
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
     cdef int[:,:,:] vequilist
+    cdef double[:] aphilist
     cdef double[:,:] vaa
+    cdef double[:,:,:] vphipart
     cdef double[:,:,:,:] doubletrans
     cdef double[:,:,:,:,:,:] vnruter
 
     nlist=wedgeres["Nlist"]
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
-    nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"]),
-                                   0,[0])
+    vnruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
+    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"],
+                                                dtype=numpy.int32),0,[0])
     ntotalindependent=naccumindependent[-1]
-    for i,e in enumerate(list4):
-        nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
+    vphipart=phipart
+    for ii,e in enumerate(list4):
+        vnruter[e[2],e[3],:,e[0],e[1],:]=vphipart[:,ii,:]
     philist=[]
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["NIndependentBasis"][ii]):
             ll=wedgeres["IndependentBasis"][jj,ii]//9
             mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
             nn=wedgeres["IndependentBasis"][jj,ii]%3
-            philist.append(nruter[ll,mm,nn,
+            philist.append(vnruter[ll,mm,nn,
                                   wedgeres["List"][0,ii],
                                   wedgeres["List"][1,ii],
                                   wedgeres["List"][2,ii]])
     aphilist=numpy.array(philist)
-    ind1equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    vind1=ind1equi
-    vind2=ind2equi
+    vind1=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    vind2=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
     vequilist=wedgeres["ALLEquiList"]
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["Nequi"][ii]):
@@ -387,8 +387,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     aphilist+=compensation
 
     # Build the final, full set of anharmonic IFCs.
-    vnruter=nruter
-    vnruter[...]=0.
+    vnruter[:,:,:,:,:,:]=0.
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["Nequi"][ii]):
             for ll in xrange(3):
@@ -402,4 +401,4 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                     ]+=wedgeres["TransformationArray"][
                                         tribasisindex,ix,jj,ii]*aphilist[
                                             naccumindependent[ii]+ix]
-    return nruter
+    return vnruter
