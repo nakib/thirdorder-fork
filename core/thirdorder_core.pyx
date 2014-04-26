@@ -40,6 +40,9 @@ cimport cthirdorder_core
 
 # NOTE: all indices used in this module are zero-based.
 
+# Maximum matrix size (rows*cols) for the dense method.
+cdef int MAXDENSE=33554432
+
 # Thin, specialized wrapper around spglib.
 cdef class SymmetryOperations:
   """
@@ -276,6 +279,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     cdef numpy.ndarray Q,R,P,ones,multiplier,compensation,aphilist
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
+    cdef int[:,:,:] vequilist
     cdef double[:,:] vaa
     cdef double[:,:,:,:] doubletrans
     cdef double[:,:,:,:,:,:] vnruter
@@ -304,21 +308,22 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
     vind1=ind1equi
     vind2=ind2equi
+    vequilist=wedgeres["ALLEquiList"]
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["Nequi"][ii]):
-            vind1[wedgeres["ALLEquiList"][0,jj,ii],
-                  wedgeres["ALLEquiList"][1,jj,ii],
-                  wedgeres["ALLEquiList"][2,jj,ii]]=ii
-            vind2[wedgeres["ALLEquiList"][0,jj,ii],
-                  wedgeres["ALLEquiList"][1,jj,ii],
-                  wedgeres["ALLEquiList"][2,jj,ii]]=jj
+            vind1[vequilist[0,jj,ii],
+                  vequilist[1,jj,ii],
+                  vequilist[2,jj,ii]]=ii
+            vind2[vequilist[0,jj,ii],
+                  vequilist[1,jj,ii],
+                  vequilist[2,jj,ii]]=jj
 
     vtrans=wedgeres["TransformationArray"]
 
     nrows=ntotalindependent
     ncols=natoms*ntot*27
 
-    if nrows>=ncols:
+    if nrows*ncols<=MAXDENSE:
         print "- Using a dense QR factorization algorithm"
         aa=numpy.zeros((nrows,ncols))
         vaa=aa
@@ -393,9 +398,9 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                     for nn in xrange(3):
                         tribasisindex=(ll*3+mm)*3+nn
                         for ix in xrange(wedgeres["NIndependentBasis"][ii]):
-                            vnruter[ll,mm,nn,wedgeres["ALLEquiList"][0,jj,ii],
-                                    wedgeres["ALLEquiList"][1,jj,ii],
-                                    wedgeres["ALLEquiList"][2,jj,ii]
+                            vnruter[ll,mm,nn,vequilist[0,jj,ii],
+                                    vequilist[1,jj,ii],
+                                    vequilist[2,jj,ii]
                                     ]+=wedgeres["TransformationArray"][
                                         tribasisindex,ix,jj,ii]*aphilist[
                                             naccumindependent[ii]+ix]
