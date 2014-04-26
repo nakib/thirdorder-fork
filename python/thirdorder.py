@@ -489,7 +489,7 @@ if __name__=="__main__":
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
             res=forces[-1].mean(axis=0)
-            print "- \t Average residual force:"
+            print "- \t Average force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
         phipart=numpy.zeros((3,nirred,ntot))
