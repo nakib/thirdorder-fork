@@ -54,6 +54,3 @@ cdef extern void wedge(double LatVec[3][3],double Coord[][3],double CoordAll[][3
 cdef extern void free_wedge(int Allocsize,int Nsymm,void *Nequi,void *List,
                             void *ALLEquiList,void *TransformationArray,
                             void  *NIndependentBasis,void *IndependentBasis)
-cdef extern void cgaussian(void *a,int row,int column,
-                           int *Ndependent,void *b,int *NIndependent,
-                           void *IndexIndependent)
