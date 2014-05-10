@@ -1,7 +1,7 @@
 !  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
-!  Copyright (C) 2012-2013 Wu Li <wu.li.phys2011@gmail.com>
-!  Copyright (C) 2012-2013 Jesús Carrete Montaña <jcarrete@gmail.com>
-!  Copyright (C) 2012-2013 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+!  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
+!  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
+!  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
 !
 !  This program is free software: you can redistribute it and/or modify
 !  it under the terms of the GNU General Public License as published by
@@ -17,8 +17,7 @@
 !  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ! The computationally intensive parts of the algorithm are implemented here.
-! wedge() is the core of this file, but the subroutine gaussian() is
-! also used from outside.
+! wedge() is the core of this file.
 ! Note that explicitly C-compatible types are used. This is critical to avoid
 ! crashes with some {architecture/C compiler/Fortran compiler} combinations.
 
@@ -586,23 +585,6 @@ contains
     Ind2Id=(Ind_cell(1)+(Ind_cell(2)+Ind_cell(3)*Ngrid2)*Ngrid1)*Nspecies+Ind_species
   end function Ind2Id
 
-  ! Thin wrapper around gaussian() to ensure interoperability with C.
-  subroutine cgaussian(ca,row,column,Ndependent,cb,NIndependent,cIndexIndependent)&
-       bind(C,name="cgaussian")
-
-    integer(kind=C_INT),value,intent(in) :: row,column
-    integer(kind=C_INT),intent(out) :: Ndependent,NIndependent
-    type(c_ptr),value,intent(in) :: ca,cb,cIndexIndependent
-
-    integer(kind=C_INT),pointer :: IndexIndependent(:)
-    real(kind=C_DOUBLE),pointer :: a(:,:),b(:,:)
-
-    call c_f_pointer(ca,a,shape=[row,column])
-    call c_f_pointer(cb,b,shape=[column,column])
-    call c_f_pointer(cIndexIndependent,IndexIndependent,&
-         shape=[column])
-    call gaussian(a,row,column,Ndependent,b,NIndependent,IndexIndependent)
-  end subroutine cgaussian
 
   ! Routine to perform Gaussian elimination. Used by wedge() to
   ! extract subsets of independent constants given overdetermined sets

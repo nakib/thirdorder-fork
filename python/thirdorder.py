@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
-#  Copyright (C) 2012-2013 Wu Li <wu.li.phys2011@gmail.com>
-#  Copyright (C) 2012-2013 Jesús Carrete Montaña <jcarrete@gmail.com>
-#  Copyright (C) 2012-2013 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
+#  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
+#  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -21,21 +21,40 @@
 import sys
 import os
 import os.path
-import tempfile
 import copy
 import glob
 import itertools
 import contextlib
 import collections
-import xml.etree.cElementTree as ElementTree
+try:
+    from lxml import etree as ElementTree
+    xmllib="lxml.etree"
+except ImportError:
+    try:
+        import xml.etree.cElementTree as ElementTree
+        xmllib="cElementTree"
+    except ImportError:
+        import xml.etree.ElementTree as ElementTree
+        xmllib="cElementTree"
+try:
+    import cStringIO as StringIO
+except ImportError:
+    import StringIO
+try:
+    import hashlib
+    hashes=True
+except ImportError:
+    hashes=False
 import numpy
 import scipy
 import scipy.linalg
+import scipy.spatial
+import scipy.spatial.distance
 import thirdorder_core
 
 
 H=2.116709e-3  # Magnitude of the finite displacements, in nm.
-
+SYMPREC=1e-5 # Tolerance for symmetry search
 
 sowblock="""
 .d88888b   .88888.  dP   dP   dP
@@ -89,7 +108,7 @@ def read_POSCAR(directory):
         f=open(os.path.join(directory,"POSCAR"),"r")
         firstline=f.next()
         factor=.1*float(f.next().strip())
-        for i in range(3):
+        for i in xrange(3):
             nruter["lattvec"][:,i]=[float(j) for j in f.next().split()]
         nruter["lattvec"]*=factor
         line=f.next()
@@ -109,11 +128,11 @@ def read_POSCAR(directory):
             typeline=f.next()
         natoms=nruter["numbers"].sum()
         nruter["positions"]=numpy.empty((3,natoms))
-        for i in range(natoms):
+        for i in xrange(natoms):
             nruter["positions"][:,i]=[float(j) for j in f.next().split()]
         f.close()
     nruter["types"]=[]
-    for i in range(len(nruter["numbers"])):
+    for i in xrange(len(nruter["numbers"])):
         nruter["types"]+=[i]*nruter["numbers"][i]
     if typeline[0]=="C":
         nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
@@ -138,57 +157,52 @@ def gen_SPOSCAR(poscar,na,nb,nc):
     nruter["numbers"]=na*nb*nc*poscar["numbers"]
     nruter["positions"]=numpy.empty((3,poscar["positions"].shape[1]*na*nb*nc))
     pos=0
-    for pos,(k,j,i,iat) in enumerate(itertools.product(range(nc),
-                                                       range(nb),
-                                                       range(na),
-                                                       range(
+    for pos,(k,j,i,iat) in enumerate(itertools.product(xrange(nc),
+                                                       xrange(nb),
+                                                       xrange(na),
+                                                       xrange(
                 poscar["positions"].shape[1]))):
         nruter["positions"][:,pos]=(poscar["positions"][:,iat]+[i,j,k])/[
             na,nb,nc]
     nruter["types"]=[]
-    for i in range(len(nruter["numbers"])):
-        nruter["types"]+=[i]*nruter["numbers"][i]
+    for i in xrange(na*nb*nc):
+        nruter["types"].extend(poscar["types"])
     return nruter
 
 
-def calc_dists2(poscar,sposcar):
+def calc_dists(sposcar):
     """
-    Return a matrix with the squared distances between atoms
-    in the supercell, using normal images.
-
+    Return the distances between atoms in the supercells, their
+    degeneracies and the associated supercell vectors.
     """
-    natoms=poscar["positions"].shape[1]
     ntot=sposcar["positions"].shape[1]
-    tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
-    calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
-    calc_dist2=lambda x,y:calc_norm2(x-y)
-    d2=numpy.empty((natoms,ntot))
-    for i in range(natoms):
-        posi=sposcar["positions"][:,i]
-        for j in range(ntot):
-            d2min=numpy.inf
-            for (ja,jb,jc) in itertools.product(range(-1,2),
-                                                range(-1,2),
-                                                range(-1,2)):
-                posj=sposcar["positions"][:,j]+[ja,jb,jc]
-                d2new=calc_dist2(posi,posj)
-                if d2new<d2min:
-                    d2min=d2new
-            d2[i,j]=d2min
-    return d2
+    posi=numpy.dot(sposcar["lattvec"],sposcar["positions"])
+    d2s=numpy.empty((27,ntot,ntot))
+    for j,(ja,jb,jc) in enumerate(itertools.product(xrange(-1,2),
+                                                    xrange(-1,2),
+                                                    xrange(-1,2))):
+        posj=numpy.dot(sposcar["lattvec"],(sposcar["positions"].T+[ja,jb,jc]).T)
+        d2s[j,:,:]=scipy.spatial.distance.cdist(posi.T,posj.T,"sqeuclidean")
+    d2min=d2s.min(axis=0)
+    dmin=numpy.sqrt(d2min)
+    degenerate=(numpy.abs(d2s-d2min)<1e-4)
+    nequi=degenerate.sum(axis=0)
+    maxequi=nequi.max()
+    shifts=numpy.empty((ntot,ntot,maxequi))
+    sorting=numpy.argsort(numpy.logical_not(degenerate),axis=0)
+    shifts=numpy.transpose(sorting[:maxequi,:,:],(1,2,0))
+    return (dmin,nequi,shifts)
 
 
-def calc_frange(poscar,sposcar,n):
+def calc_frange(poscar,sposcar,n,dmin):
     """
-    Return the squared maximum distance between n-th neighbors in
-    the structure.
+    Return the maximum distance between n-th neighbors in the structure.
     """
-    natoms=poscar["positions"].shape[1]
-    d2=calc_dists2(poscar,sposcar)
+    natoms=len(poscar["types"])
     tonth=[]
     warned=False
-    for i in range(natoms):
-        ds=d2[i,:].tolist()
+    for i in xrange(natoms):
+        ds=dmin[i,:].tolist()
         ds.sort()
         u=[]
         for j in ds:
@@ -205,7 +219,7 @@ def calc_frange(poscar,sposcar,n):
                     "Warning: supercell too small to find n-th neighbours\n")
                 warned=True
             tonth.append(1.1*max(u))
-    return numpy.sqrt(max(tonth))
+    return max(tonth)
 
 
 def move_two_atoms(poscar,iat,icoord,ih,jat,jcoord,jh):
@@ -230,53 +244,43 @@ def write_POSCAR(poscar,filename):
     """
     Write the contents of poscar to filename.
     """
-    f=open(filename,"w")
-    f.write("{}\n1.0\n".format(filename))
-    for i in range(3):
+    global hashes
+    f=StringIO.StringIO()
+    f.write("1.0\n".format(filename))
+    for i in xrange(3):
         f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             (poscar["lattvec"][:,i]*10.).tolist()))
     f.write("{}\n".format(" ".join(poscar["elements"])))
     f.write("{}\n".format(" ".join([str(i) for i in poscar["numbers"]])))
     f.write("Direct\n")
-    for i in range(poscar["positions"].shape[1]):
+    for i in xrange(poscar["positions"].shape[1]):
         f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             poscar["positions"][:,i].tolist()))
+    if hashes:
+        header=hashlib.sha1(f.getvalue()).hexdigest()
+    else:
+        header=filename
+    with open(filename,"w") as finalf:
+        finalf.write("{}\n".format(header))
+        finalf.write(f.getvalue())
     f.close()
 
 
 def normalize_SPOSCAR(sposcar):
     """
     Rearrange sposcar, as generated by gen_SPOSCAR, so that it is in
-    valid VASP order, and return the result. Note that only positions
-    are reordered, so this object should not be used in a general
-    context.
+    valid VASP order, and return the result.
     """
     nruter=copy.deepcopy(sposcar)
     # Order used internally (from most to least significant):
     # k,j,i,iat For VASP, iat must be the most significant index,
     # i.e., atoms of the same element must go together.
-    indices=numpy.array(range(nruter["positions"].shape[1])).reshape(
+    indices=numpy.array(xrange(nruter["positions"].shape[1])).reshape(
         (sposcar["nc"],sposcar["nb"],sposcar["na"],-1))
     indices=numpy.rollaxis(indices,3,0).flatten().tolist()
     nruter["positions"]=nruter["positions"][:,indices]
+    nruter["types"].sort()
     return nruter
-
-
-def ind2id(i,j,k,iat,na,nb,nc,natom):
-    """
-    Map four indices to a single atom id.
-    """
-    return iat+natom*(i+na*(j+nb*k))
-
-
-def id2ind(anid,na,nb,nc,nat):
-    """
-    Split an atom id into four indices.
-    """
-    tmp,iat=divmod(anid,nat)
-    tmp,i=divmod(tmp,na)
-    k,j=divmod(tmp,nb)
-    return dict(i=i,j=j,k=k,iat=iat)
 
 
 def build_list4(wedgeres):
@@ -285,8 +289,8 @@ def build_list4(wedgeres):
     """
     ntotalindependent=sum(wedgeres["NIndependentBasis"])
     list6=[]
-    for ii in range(wedgeres["Nlist"]):
-        for jj in range(wedgeres["NIndependentBasis"][ii]):
+    for ii in xrange(wedgeres["Nlist"]):
+        for jj in xrange(wedgeres["NIndependentBasis"][ii]):
             ll=wedgeres["IndependentBasis"][jj,ii]//9
             mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
             nn=wedgeres["IndependentBasis"][jj,ii]%3
@@ -323,110 +327,72 @@ def build_unpermutation(sposcar):
     Return a list of integers mapping the atoms in the normalized
     version of sposcar to their original indices.
     """
-    indices=numpy.array(range(sposcar["positions"].shape[1])).reshape(
+    indices=numpy.array(xrange(sposcar["positions"].shape[1])).reshape(
         (sposcar["nc"],sposcar["nb"],sposcar["na"],-1))
     indices=numpy.rollaxis(indices,3,0).flatten()
     return indices.argsort().tolist()
 
 
-def write_ifcs(phifull,poscar,sposcar,frange,filename):
+def write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,filename):
     """
     Write out the full anharmonic interatomic force constant matrix,
     taking the force cutoff into account.
     """
-    frange2=frange*frange
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
 
+    shifts27=list(itertools.product(xrange(-1,2),
+                                    xrange(-1,2),
+                                    xrange(-1,2)))
+    frange2=frange*frange
+
     nblocks=0
-    tmpname=tempfile.mkstemp()[1]
-    f=open(tmpname,"w")
-
-    tensor=numpy.dot(sposcar["lattvec"].T,sposcar["lattvec"])
-    calc_norm2=lambda x:numpy.dot(x,numpy.dot(tensor,x))
-    calc_dist2=lambda x,y:calc_norm2(x-y)
-    nruter=[]
-
-    shift2all=numpy.zeros((3,27),dtype=numpy.int32)
-    shift3all=numpy.zeros((3,27),dtype=numpy.int32)
-    d2s=numpy.zeros(27)
-    for ii in range(natoms):
-        posi=sposcar["positions"][:,ii]
-        for jj in range(ntot):
-            for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
-                                                            range(-1,2),
-                                                            range(-1,2))):
-                posj=sposcar["positions"][:,jj]+[ja,jb,jc]
-                d2s[i]=calc_dist2(posi,posj)
-            d2min=d2s.min()
-            n2equi=0
-            for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
-                                                            range(-1,2),
-                                                            range(-1,2))):
-                if numpy.abs(d2s[i]-d2min)<1e-2:
-                    shift2all[:,n2equi]=[ja,jb,jc]
-                    n2equi+=1
+    f=StringIO.StringIO()
+    for ii,jj in itertools.product(xrange(natoms),
+                                   xrange(ntot)):
+        if dmin[ii,jj]>=frange:
+            continue
+        jatom=jj%natoms
+        shiftsij=[shifts27[i] for i in shifts[ii,jj,:nequi[ii,jj]]]
+        for kk in xrange(ntot):
+            if dmin[ii,kk]>=frange:
+                continue
+            katom=kk%natoms
+            shiftsik=[shifts27[i] for i in shifts[ii,kk,:nequi[ii,kk]]]
+            d2min=numpy.inf
+            for shift2 in shiftsij:
+                carj=numpy.dot(sposcar["lattvec"],shift2+sposcar["positions"][:,jj])
+                for shift3 in shiftsik:
+                    cark=numpy.dot(sposcar["lattvec"],shift3+sposcar["positions"][:,kk])
+                    d2=((carj-cark)**2).sum()
+                    if d2<d2min:
+                        best2=shift2
+                        best3=shift3
+                        d2min=d2
             if d2min>=frange2:
                 continue
-            for kk in range(ntot):
-                n3equi=0
-                for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
-                                                                range(-1,2),
-                                                                range(-1,2))):
-                    posk=sposcar["positions"][:,kk]+[ja,jb,jc]
-                    d2s[i]=calc_dist2(posi,posk)
-                d2min=d2s.min()
-                n3equi=0
-                for i,(ja,jb,jc) in enumerate(itertools.product(range(-1,2),
-                                                                range(-1,2),
-                                                                range(-1,2))):
-                    if numpy.abs(d2s[i]-d2min)<1e-2:
-                        shift3all[:,n3equi]=[ja,jb,jc]
-                        n3equi+=1
-                if d2min>=frange2:
-                    continue
-                dp2min=numpy.inf
-                for iaux in range(n2equi):
-                    for jaux in range(n3equi):
-                        dp2=calc_dist2(sposcar["positions"][:,jj]+shift2all[:,iaux],
-                                       sposcar["positions"][:,kk]+shift3all[:,jaux])
-                        if dp2<dp2min:
-                            dp2min=dp2
-                            shift2=shift2all[:,iaux]
-                            shift3=shift3all[:,jaux]
-                if dp2min>=frange2:
-                    continue
-                nblocks+=1
-                jatom=jj%natoms
-                katom=kk%natoms
-                carj=(numpy.dot(sposcar["lattvec"],
-                                shift2+sposcar["positions"][:,jj])-
-                                numpy.dot(poscar["lattvec"],
-                                          poscar["positions"][:,jatom]))
-                cark=(numpy.dot(sposcar["lattvec"],
-                                shift3+sposcar["positions"][:,kk])-
-                                numpy.dot(poscar["lattvec"],
-                                          poscar["positions"][:,katom]))
-                f.write("\n")
-                f.write("{:>5}\n".format(nblocks))
-                f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
-                        format(list(10.*carj)))
-                f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
-                        format(list(10.*cark)))
-                f.write("{:>6d} {:>6d} {:>6d}\n".format(ii+1,jatom+1,katom+1))
-                for ll,mm,nn in itertools.product(range(3),
-                                                  range(3),
-                                                  range(3)):
-                    f.write("{:>2d} {:>2d} {:>2d} {:>20.10e}\n".
-                            format(ll+1,mm+1,nn+1,phifull[ll,mm,nn,ii,jj,kk]))
+            nblocks+=1
+            Rj=numpy.dot(sposcar["lattvec"],
+                         best2+sposcar["positions"][:,jj]-sposcar["positions"][:,jatom])
+            Rk=numpy.dot(sposcar["lattvec"],
+                         best3+sposcar["positions"][:,kk]-sposcar["positions"][:,katom])
+            f.write("\n")
+            f.write("{:>5}\n".format(nblocks))
+            f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
+                    format(list(10.*Rj)))
+            f.write("{0[0]:>15.10e} {0[1]:>15.10e} {0[2]:>15.10e}\n".
+                    format(list(10.*Rk)))
+            f.write("{:>6d} {:>6d} {:>6d}\n".format(ii+1,jatom+1,katom+1))
+            for ll,mm,nn in itertools.product(xrange(3),
+                                              xrange(3),
+                                              xrange(3)):
+                f.write("{:>2d} {:>2d} {:>2d} {:>20.10e}\n".
+                        format(ll+1,mm+1,nn+1,phifull[ll,mm,nn,ii,jj,kk]))
+    ffinal=open(filename,"w")
+    ffinal.write("{:>5}\n".format(nblocks))
+    ffinal.write(f.getvalue())
     f.close()
-    f=open(filename,"w")
-    f.write("{:>5}\n".format(nblocks))
-    ftmp=open(tmpname,"r")
-    for l in ftmp:
-        f.write(l)
-    ftmp.close()
-    f.close()
+    ffinal.close()
 
 
 if __name__=="__main__":
@@ -454,17 +420,19 @@ if __name__=="__main__":
     print "Reading POSCAR"
     poscar=read_POSCAR(".")
     natoms=len(poscar["types"])
-    print "Analyzing symmetries"
+    print "Analyzing the symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
-        poscar["positions"].T)
+        poscar["positions"].T,SYMPREC)
     print "- Symmetry group {} detected".format(symops.symbol)
     print "- {} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
     sposcar=gen_SPOSCAR(poscar,na,nb,nc)
     ntot=natoms*na*nb*nc
+    print "Computing all distances in the supercell"
+    dmin,nequi,shifts=calc_dists(sposcar)
     if nneigh!=None:
-        frange=calc_frange(poscar,sposcar,nneigh)
+        frange=calc_frange(poscar,sposcar,nneigh,dmin)
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
@@ -483,7 +451,7 @@ if __name__=="__main__":
         namepattern="3RD.POSCAR.{{0:0{}d}}".format(width)
         print "Writing displaced coordinates to 3RD.POSCAR.*"
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 # Start numbering the files at 1 for aesthetic
@@ -497,6 +465,7 @@ if __name__=="__main__":
                 write_POSCAR(dsposcar,filename)
     else:
         print reapblock
+        print "XML ElementTree implementation: {}".format(xmllib)
         print "Waiting for a list of vasprun.xml files on stdin"
         filelist=[]
         for l in sys.stdin:
@@ -519,20 +488,20 @@ if __name__=="__main__":
         for i in filelist:
             forces.append(read_forces(i)[p,:])
             print "- {} read successfully".format(i)
-            res=forces[-1].sum(axis=0)
-            print "- \t Average residual force:"
+            res=forces[-1].mean(axis=0)
+            print "- \t Average force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
         phipart=numpy.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 number=nirred*n+i
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
-        print "Reconstructing the full matrix"
+        print "Reconstructing the full array"
         phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
         print "Writing the constants to FORCE_CONSTANTS_3RD"
-        write_ifcs(phifull,poscar,sposcar,frange,"FORCE_CONSTANTS_3RD")
+        write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
     print doneblock

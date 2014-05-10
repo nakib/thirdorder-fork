@@ -1,7 +1,7 @@
 #  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
-#  Copyright (C) 2012-2013 Wu Li <wu.li.phys2011@gmail.com>
-#  Copyright (C) 2012-2013 Jesús Carrete Montaña <jcarrete@gmail.com>
-#  Copyright (C) 2012-2013 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
+#  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
+#  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -29,6 +29,8 @@ from libc.math cimport round,fabs,sqrt
 import numpy
 import scipy
 import scipy.linalg
+import scipy.sparse
+import scipy.sparse.linalg
 
 cimport cython
 cimport numpy
@@ -36,6 +38,9 @@ numpy.import_array()
 cimport cthirdorder_core
 
 # NOTE: all indices used in this module are zero-based.
+
+# Maximum matrix size (rows*cols) for the dense method.
+DEF MAXDENSE=33554432
 
 # Thin, specialized wrapper around spglib.
 cdef class SymmetryOperations:
@@ -175,10 +180,17 @@ def pywedge(poscar,sposcar,symops,frange):
     """
     cdef double ForceRange
     cdef int Ngrid1,Ngrid2,Ngrid3,Nsymm,Natoms,Ntot,Nlist,Allocsize
-    cdef double LatVec[3][3],(*Coord)[3],(*CoordAll)[3]
-    cdef double (*Orth)[3][3],(*Trans)[3]
-    cdef void *vNequi,*vList,*vALLEquiList,*vTransformationArray
-    cdef void *vNIndependentBasis,*vIndependentBasis
+    cdef double LatVec[3][3],
+    cdef double (*Coord)[3]
+    cdef double (*CoordAll)[3]
+    cdef double (*Orth)[3][3]
+    cdef double (*Trans)[3]
+    cdef void *vNequi
+    cdef void *vList
+    cdef void *vALLEquiList
+    cdef void *vTransformationArray
+    cdef void *vNIndependentBasis
+    cdef void *vIndependentBasis
     cdef int i,j,k
 
     crotations=numpy.empty_like(symops.rotations)
@@ -254,43 +266,6 @@ def pywedge(poscar,sposcar,symops,frange):
     return nruter
 
 
-def pygaussian(m):
-    """
-    Straightforward wrapper around the gaussian() subroutine. m is
-    left unchanged.
-    """
-    cdef int i,j
-    cdef int row,colum,Ndependent,NIndependent
-    cdef void *IndexIndependent,*a,*b
-
-    row,column=m.shape
-    IndexIndependent=malloc(column*sizeof(int))
-    a=malloc(row*column*sizeof(double))
-    for i in range(row):
-        for j in range(column):
-            (<double(*)>a)[i+j*row]=m[i,j]
-    b=malloc(column*column*sizeof(double))
-
-    cthirdorder_core.cgaussian(a,row,column,&Ndependent,b,
-                               &NIndependent,IndexIndependent)
-
-    nruter=dict()
-    nruter["Ndependent"]=int(Ndependent)
-    nruter["NIndependent"]=int(NIndependent)
-    nruter["IndexIndependent"]=numpy.empty(column,dtype=numpy.int32)
-    nruter["IndexIndependent"][:]=<int[:column]>IndexIndependent
-    nruter["IndexIndependent"]-=1
-    nruter["a"]=numpy.empty((column,row))
-    nruter["a"][:,:]=<double[:column,:row]>a
-    nruter["a"]=nruter["a"].T
-    nruter["b"]=numpy.empty((column,column))
-    nruter["b"][:,:]=<double[:column,:column]>b
-    nruter["b"]=nruter["b"].T
-    free(b)
-    free(a)
-    free(IndexIndependent)
-    return nruter
-
 @cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     """
@@ -298,98 +273,132 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     force constants and the information obtained from wedge().
     """
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
-    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,rowindex
-    cdef numpy.ndarray nruter,naccumindependent,aa,ind1equi,ind2equi
+    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex,nrows,ncols
+    cdef int[:] naccumindependent
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
+    cdef int[:,:,:] vequilist
+    cdef double[:] aphilist
     cdef double[:,:] vaa
+    cdef double[:,:,:] vphipart
     cdef double[:,:,:,:] doubletrans
+    cdef double[:,:,:,:,:,:] vnruter
 
     nlist=wedgeres["Nlist"]
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
-    nruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"]),
-                                   0,[0])
+    vnruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
+    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"],
+                                                dtype=numpy.int32),0,[0])
     ntotalindependent=naccumindependent[-1]
-    for i,e in enumerate(list4):
-        nruter[e[2],e[3],:,e[0],e[1],:]=phipart[:,i,:]
+    vphipart=phipart
+    for ii,e in enumerate(list4):
+        vnruter[e[2],e[3],:,e[0],e[1],:]=vphipart[:,ii,:]
     philist=[]
-    for ii in range(nlist):
-        for jj in range(wedgeres["NIndependentBasis"][ii]):
+    for ii in xrange(nlist):
+        for jj in xrange(wedgeres["NIndependentBasis"][ii]):
             ll=wedgeres["IndependentBasis"][jj,ii]//9
             mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
             nn=wedgeres["IndependentBasis"][jj,ii]%3
-            philist.append(nruter[ll,mm,nn,
+            philist.append(vnruter[ll,mm,nn,
                                   wedgeres["List"][0,ii],
                                   wedgeres["List"][1,ii],
                                   wedgeres["List"][2,ii]])
-    philist=numpy.array(philist)
-    ind1equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    ind2equi=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    vind1=ind1equi
-    vind2=ind2equi
-    for ii in range(nlist):
-        for jj in range(wedgeres["Nequi"][ii]):
-            vind1[wedgeres["ALLEquiList"][0,jj,ii],
-                  wedgeres["ALLEquiList"][1,jj,ii],
-                  wedgeres["ALLEquiList"][2,jj,ii]]=ii
-            vind2[wedgeres["ALLEquiList"][0,jj,ii],
-                  wedgeres["ALLEquiList"][1,jj,ii],
-                  wedgeres["ALLEquiList"][2,jj,ii]]=jj
-    aa=numpy.zeros((natoms*ntot*27,ntotalindependent))
-    vaa=aa
+    aphilist=numpy.array(philist)
+    vind1=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    vind2=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    vequilist=wedgeres["ALLEquiList"]
+    for ii in xrange(nlist):
+        for jj in xrange(wedgeres["Nequi"][ii]):
+            vind1[vequilist[0,jj,ii],
+                  vequilist[1,jj,ii],
+                  vequilist[2,jj,ii]]=ii
+            vind2[vequilist[0,jj,ii],
+                  vequilist[1,jj,ii],
+                  vequilist[2,jj,ii]]=jj
+
     vtrans=wedgeres["TransformationArray"]
-    nnonzero=0
-    for ii in range(natoms):
-        for jj in range(ntot):
-            for ll in range(3):
-                for mm in range(3):
-                    for nn in range(3):
-                        tribasisindex=(ll*3+mm)*3+nn
-                        rowindex=(ii*natoms+jj)*27+tribasisindex
-                        for kk in range(ntot):
-                            for ix in range(nlist):
-                                if vind1[ii,jj,kk]==ix:
-                                    for ss in range(naccumindependent[ix],naccumindependent[ix+1]):
-                                        tt=ss-naccumindependent[ix]
-                                        vaa[rowindex,ss]+=vtrans[tribasisindex,tt,
-                                                                 vind2[ii,jj,kk],ix]
-                        vaa[nnonzero,:ntotalindependent]=vaa[rowindex,:ntotalindependent]
-                        nnonzero+=1
-    aa[numpy.abs(aa)<=1e-14]=0.
-    aux=numpy.array(aa[:nnonzero,:ntotalindependent])
-    gaussianres=pygaussian(aux)
-    aux=gaussianres["a"]
-    nnonzero=gaussianres["Ndependent"]
 
-    # Enforce translational symmetry.
-    bb=numpy.array(aux[:nnonzero,:ntotalindependent]).T
-    # multiplier=-scipy.linalg.lstsq(bb,philist)[0]
-    # compensation=numpy.dot(bb,multiplier)
-    # philist+=compensation
+    nrows=ntotalindependent
+    ncols=natoms*ntot*27
 
-    D=numpy.diag(philist)
-    ones=numpy.ones_like(philist)
-    bb=numpy.dot(D,bb)
-    multiplier=-scipy.linalg.lstsq(bb,ones)[0]
-    compensation=numpy.dot(D,numpy.dot(bb,multiplier))
-    philist+=compensation
+    if nrows*ncols<=MAXDENSE:
+        print "- Using a dense QR factorization algorithm"
+        aa=numpy.zeros((nrows,ncols))
+        vaa=aa
+        colindex=0
+        for ii in xrange(natoms):
+            for jj in xrange(ntot):
+                tribasisindex=0
+                for ll in xrange(3):
+                    for mm in xrange(3):
+                        for nn in xrange(3):
+                            for kk in xrange(ntot):
+                                for ix in xrange(nlist):
+                                    if vind1[ii,jj,kk]==ix:
+                                        for ss in xrange(naccumindependent[ix],
+                                                         naccumindependent[ix+1]):
+                                            tt=ss-naccumindependent[ix]
+                                            vaa[ss,colindex]+=vtrans[tribasisindex,tt,
+                                                                     vind2[ii,jj,kk],ix]
+                            tribasisindex+=1
+                            colindex+=1
+        Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
+        nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
+        bb=numpy.array(Q[:,:nnonzero])
+        D=numpy.diag(aphilist)
+        ones=numpy.ones_like(aphilist)
+        bb=numpy.dot(D,bb)
+        multiplier=-scipy.linalg.lstsq(bb,ones)[0]
+        compensation=numpy.dot(D,numpy.dot(bb,multiplier))
+    else:
+        print "- Using a sparse least-squares method"
+        i=[]
+        j=[]
+        v=[]
+        colindex=0
+        for ii in xrange(natoms):
+            for jj in xrange(ntot):
+                tribasisindex=0
+                for ll in xrange(3):
+                    for mm in xrange(3):
+                        for nn in xrange(3):
+                            for kk in xrange(ntot):
+                                for ix in xrange(nlist):
+                                    if vind1[ii,jj,kk]==ix:
+                                        for ss in xrange(naccumindependent[ix],
+                                                         naccumindependent[ix+1]):
+                                            tt=ss-naccumindependent[ix]
+                                            i.append(ss)
+                                            j.append(colindex)
+                                            v.append(vtrans[tribasisindex,tt,
+                                                            vind2[ii,jj,kk],ix])
+                            tribasisindex+=1
+                            colindex+=1
+        print "- \t Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
+        aa=scipy.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
+        D=scipy.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
+                               format="csr")
+        bbs=D.dot(aa)
+        ones=numpy.ones_like(aphilist)
+        multiplier=-scipy.sparse.linalg.lsqr(bbs,ones)[0]
+        compensation=D.dot(bbs.dot(multiplier))
 
+    aphilist+=compensation
 
     # Build the final, full set of anharmonic IFCs.
-    nruter[:,:,:,:,:,:]=0.
-    for ii in range(nlist):
-        for jj in range(wedgeres["Nequi"][ii]):
-            for ll in range(3):
-                for mm in range(3):
-                    for nn in range(3):
+    vnruter[:,:,:,:,:,:]=0.
+    for ii in xrange(nlist):
+        for jj in xrange(wedgeres["Nequi"][ii]):
+            for ll in xrange(3):
+                for mm in xrange(3):
+                    for nn in xrange(3):
                         tribasisindex=(ll*3+mm)*3+nn
-                        for ix in range(wedgeres["NIndependentBasis"][ii]):
-                            nruter[ll,mm,nn,wedgeres["ALLEquiList"][0,jj,ii],
-                                   wedgeres["ALLEquiList"][1,jj,ii],
-                                   wedgeres["ALLEquiList"][2,jj,ii]
-                                   ]+=wedgeres["TransformationArray"][
-                                       tribasisindex,ix,jj,ii]*philist[
-                                           naccumindependent[ii]+ix]
-    return nruter
+                        for ix in xrange(wedgeres["NIndependentBasis"][ii]):
+                            vnruter[ll,mm,nn,vequilist[0,jj,ii],
+                                    vequilist[1,jj,ii],
+                                    vequilist[2,jj,ii]
+                                    ]+=wedgeres["TransformationArray"][
+                                        tribasisindex,ix,jj,ii]*aphilist[
+                                            naccumindependent[ii]+ix]
+    return vnruter

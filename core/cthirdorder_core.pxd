@@ -1,7 +1,7 @@
 #  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
-#  Copyright (C) 2012-2013 Wu Li <wu.li.phys2011@gmail.com>
-#  Copyright (C) 2012-2013 Jesús Carrete Montaña <jcarrete@gmail.com>
-#  Copyright (C) 2012-2013 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
+#  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
+#  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -54,6 +54,3 @@ cdef extern void wedge(double LatVec[3][3],double Coord[][3],double CoordAll[][3
 cdef extern void free_wedge(int Allocsize,int Nsymm,void *Nequi,void *List,
                             void *ALLEquiList,void *TransformationArray,
                             void  *NIndependentBasis,void *IndependentBasis)
-cdef extern void cgaussian(void *a,int row,int column,
-                           int *Ndependent,void *b,int *NIndependent,
-                           void *IndexIndependent)
