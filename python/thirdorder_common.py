@@ -38,7 +38,6 @@ import scipy
 import scipy.linalg
 import scipy.spatial
 import scipy.spatial.distance
-import thirdorder_core
 
 
 H=2.116709e-3  # Magnitude of the finite displacements, in nm.

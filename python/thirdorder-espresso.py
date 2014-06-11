@@ -1,0 +1,439 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
+#  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
+#  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
+#  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import os.path
+import re
+import glob
+
+import thirdorder_core
+from thirdorder_common import *
+
+
+BOHR_RADIUS=5.29e-2 # nm
+RYDBERG=13.605 # eV
+
+
+def qe_cell(ibrav,celldm):
+    """
+    Return a set of lattice vectors according to Quantum Espresso's
+    convention. ibrav=0 is not supported by this function.
+    """
+    nruter=numpy.zeros((3,3))
+    if ibrav==1:
+        nruter=numpy.eye(3)
+    elif ibrav==2:
+        nruter[0,0]=-0.5
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.5
+        nruter[1,0]= 0.0
+        nruter[1,1]= 0.5
+        nruter[1,2]= 0.5
+        nruter[2,0]=-0.5
+        nruter[2,1]= 0.5
+        nruter[2,2]= 0.0
+    elif ibrav==3:
+        nruter[0,0]= 0.5
+        nruter[0,1]= 0.5
+        nruter[0,2]= 0.5
+        nruter[1,0]=-0.5
+        nruter[1,1]= 0.5
+        nruter[1,2]= 0.5
+        nruter[2,0]=-0.5
+        nruter[2,1]=-0.5
+        nruter[2,2]= 0.5
+    elif ibrav==4:
+        nruter[0,0]= 1.0
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.0
+        nruter[1,0]=-0.5
+        nruter[1,1]= numpy.sqrt(3.)/2.
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]
+    elif ibrav==5:
+        nruter[0,0]= numpy.sqrt((1-celldm[4])/2.)
+        nruter[0,1]=-numpy.sqrt((1-celldm[4])/6.)
+        nruter[0,2]= numpy.sqrt((1+2*celldm[4])/3.)
+        nruter[1,0]= 0.
+        nruter[1,1]= 2.*numpy.sqrt((1-celldm[4])/6.)
+        nruter[1,2]= numpy.sqrt((1+2*celldm[4])/3.)
+        nruter[2,0]=-numpy.sqrt((1-celldm[4])/2.)
+        nruter[2,1]=-numpy.sqrt((1-celldm[4])/6.)
+        nruter[2,2]= numpy.sqrt((1+2*celldm[4])/3.)
+    elif ibrav==6:
+        nruter[0,0]= 1.0
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.0
+        nruter[1,0]= 0.0
+        nruter[1,1]= 1.0
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]
+    elif ibrav==7:
+        nruter[0,0]= 0.5
+        nruter[0,1]=-0.5
+        nruter[0,2]= celldm[3]
+        nruter[1,0]= 0.5
+        nruter[1,1]= 0.5
+        nruter[1,2]= celldm[3]
+        nruter[2,0]=-0.5
+        nruter[2,1]=-0.5
+        nruter[2,2]= celldm[3]
+    elif ibrav==8:
+        nruter[0,0]= 1.0
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.0
+        nruter[1,0]= 0.0
+        nruter[1,1]= celldm[2]
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]
+    elif ibrav==9:
+        nruter[0,0]= 0.5
+        nruter[0,1]= celldm[2]/2.
+        nruter[0,2]= 0.0
+        nruter[1,0]=-0.5
+        nruter[1,1]= celldm[2]/2.
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]
+    elif ibrav==10:
+        nruter[0,0]= 0.5
+        nruter[0,1]= 0.0
+        nruter[0,2]= celldm[3]/2.
+        nruter[1,0]= 0.5
+        nruter[1,1]= celldm[2]/2.
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= celldm[2]/2.
+        nruter[2,2]= celldm[3]/2.
+    elif ibrav==11:
+        nruter[0,0]= 0.5
+        nruter[0,1]= celldm[2]/2.
+        nruter[0,2]= celldm[3]/2.
+        nruter[1,0]=-0.5
+        nruter[1,1]= celldm[2]/2.
+        nruter[1,2]= celldm[3]/2.
+        nruter[2,0]=-0.5
+        nruter[2,1]=-celldm[2]/2.
+        nruter[2,2]= celldm[3]/2.
+    elif ibrav==12:
+        nruter[0,0]= 1.0
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.0
+        nruter[1,0]= celldm[2]*celldm[4]
+        nruter[1,1]= celldm[2]*numpy.sqrt(1-celldm[4]**2)
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]
+    elif ibrav==13:
+        nruter[0,0]= 0.5
+        nruter[0,1]= 0.0
+        nruter[0,2]=-celldm[3]/2.
+        nruter[1,0]= celldm[2]*celldm[4]
+        nruter[1,1]= celldm[2]*numpy.sqrt(1-celldm[4]**2)
+        nruter[1,2]= 0.
+        nruter[2,0]= 0.5
+        nruter[2,1]= 0.
+        nruter[2,2]= celldm[3]/2.
+    elif ibrav==14:
+        nruter[0,0]= 1.0
+        nruter[0,1]= 0.0
+        nruter[0,2]= 0.0
+        nruter[1,0]= celldm[2]*celldm[6]
+        nruter[1,1]= celldm[2]*numpy.sin(
+            numpy.arccos(celldm[6]))
+        nruter[1,2]= 0.
+        nruter[2,0]= celldm[3]*celldm[5]
+        nruter[2,1]= celldm[3]*(celldm[4]-
+                                celldm[5]*celldm[6])/numpy.sin(
+                                    numpy.arccos(celldm[6]))
+        nruter[2,2]= celldm[3]*numpy.sqrt(1+
+                                          2*celldm[4]*celldm[5]*celldm[6]-
+                                          celldm[4]**2-celldm[5]**2-
+                                          celldm[6]**2)/numpy.sin(
+                                              numpy.arccos(celldm[6]))
+    else:
+        raise ValueError("unknown ibrav")
+    return nruter
+
+
+def read_qe_in(filename):
+    """
+    Return all the relevant information about the system from a QE
+    input file.
+    """
+    celldmre=re.compile(r"celldm\((?P<number>\d)\)\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",re.MULTILINE)
+    tagre=lambda keyword:re.compile(
+        re.escape(keyword)+
+        r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",re.MULTILINE)
+    kindre=re.compile(r"[\{\(]\s*(?P<kind>\S+)\s*[\}\)]")
+    contents=open(filename,"r").read()
+    try:
+        ibrav=int(tagre("ibrav").search(contents).group("value"))
+    except TypeError:
+        sys.exit("Error: could not find the ibrav tag")
+    try:
+        natoms=int(tagre("nat").search(contents).group("value"))
+    except TypeError:
+        sys.exit("Error: could not find the nat tag")
+    try:
+        nelements=int(tagre("ntyp").search(contents).group("value"))
+    except TypeError:
+        sys.exit("Error: could not find the ntyp tag")
+    celldm=dict()
+    for m in celldmre.finditer(contents):
+        res=m.groupdict()
+        celldm[int(res["number"])]=float(res["value"])
+    celldm[1]*=BOHR_RADIUS
+    nruter=dict()
+    nruter["lattvec"]=qe_cell(ibrav,celldm).T*celldm[1]
+    nruter["positions"]=numpy.empty((3,natoms))
+    nruter["elements"]=[]
+    lines=contents.split("\n")
+    reading=False
+    read=0
+    for l in lines:
+        if reading:
+            fields=l.split()
+            nruter["elements"].append(fields[0])
+            nruter["positions"][:,read]=[float(i) for i in fields[1:4]]
+            read=read+1
+            if read==natoms:
+                break
+        if l.startswith("ATOMIC_POSITIONS"):
+            try:
+                kind=kindre.search(l).group("kind")
+            except AttributeError:
+                kind="alat"
+            if kind not in ("alat","bohr","angstrom","crystal"):
+                raise ValueError("cannot interpret coordinates in \"{}\" format"
+                                 .format(kind))
+            reading=True
+    if kind=="alat":
+        nruter["positions"]*=celldm[1]
+    elif kind=="bohr":
+        nruter["positions"]*=BOHR_RADIUS
+    elif kind=="angstrom":
+        nruter["positions"]*=.1
+    if kind!="crystal":
+        nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
+                                               nruter["positions"])
+    aux=collections.OrderedDict()
+    for e in nruter["elements"]:
+        aux[e]=None
+    aux=aux.keys()
+    nruter["types"]=[aux.index(i) for i in nruter["elements"]]
+    return nruter
+
+
+def gen_supercell(poscar,na,nb,nc):
+    """
+    Create a dictionary similar to the first argument but describing a
+    supercell.
+    """
+    nruter=dict()
+    nruter["na"]=na
+    nruter["nb"]=nb
+    nruter["nc"]=nc
+    nruter["lattvec"]=numpy.array(poscar["lattvec"])
+    nruter["lattvec"][:,0]*=na
+    nruter["lattvec"][:,1]*=nb
+    nruter["lattvec"][:,2]*=nc
+    nruter["elements"]=[]
+    nruter["types"]=[]
+    nruter["positions"]=numpy.empty((3,poscar["positions"].shape[1]*na*nb*nc))
+    pos=0
+    for pos,(k,j,i,iat) in enumerate(itertools.product(range(nc),
+                                                       range(nb),
+                                                       range(na),
+                                                       range(
+                poscar["positions"].shape[1]))):
+        nruter["positions"][:,pos]=(poscar["positions"][:,iat]+[i,j,k])/[
+            na,nb,nc]
+        nruter["elements"].append(poscar["elements"][iat])
+        nruter["types"].append(poscar["types"][iat])
+    return nruter
+
+
+def write_supercell(templatefile,poscar,filename):
+    """
+    Create a Quantum Espresso input file for a supercell calculation
+    from a template.
+    """
+    text=open(templatefile,"r").read()
+    for i in ("##CELL##","##NATOMS##","##COORDINATES##"):
+        if i not in text:
+            raise ValueError("the template does not contain a {} tag".format(i))
+    text=text.replace("##NATOMS##",str(len(poscar["types"])))
+    celltext="CELL_PARAMETERS {angstrom}\n"+"\n".join([
+            " ".join(["{0:>20.15g}".format(10.*i) for i in j]) for j in poscar["lattvec"].T.tolist()
+            ])
+    text=text.replace("##CELL##",celltext)
+    coordtext="ATOMIC_POSITIONS {crystal}\n"+"\n".join([
+            e+" "+" ".join(["{0:>20.15g}".format(i) for i in j]) for e,j in zip(poscar["elements"],
+                                                                                poscar["positions"].T.tolist())
+            ])
+    text=text.replace("##COORDINATES##",coordtext)
+    open(filename,"w").write(text)
+
+
+def read_forces(filename):
+    """
+    Read a set of forces on atoms from filename, presumably in
+    Quantum Espresso's output format. Units: eV/nm
+    """
+    nruter=[]
+    with open(filename,"r") as f:
+        for l in f:
+            fields=l.split()
+            if len(fields)==9 and fields[0]=="atom" and fields[4]=="force":
+                nruter.append([float(i) for i in fields[6:]])
+    nruter=numpy.array(nruter)*RYDBERG/BOHR_RADIUS
+    return nruter
+
+
+if __name__=="__main__":
+    def usage():
+        """
+        Print an usage message and exit.
+        """
+        sys.exit("""Usage:
+\t{program:s} unitcell.in sow na nb nc cutoff[nm/-integer] supercell_template.in
+\t{program:s} unitcell.in reap na nb nc cutoff[nm/-integer]""".format(program=sys.argv[0]))
+    if len(sys.argv) not in (7,8) or sys.argv[2] not in ("sow","reap"):
+        usage()
+    ufilename=sys.argv[1]
+    action=sys.argv[2]
+    na,nb,nc=[int(i) for i in sys.argv[3:6]]
+    if action=="sow":
+        if len(sys.argv)!=8:
+            usage()
+        sfilename=sys.argv[7]
+    else:
+        if len(sys.argv)!=7:
+            usage()
+    if min(na,nb,nc)<1:
+        sys.exit("Error: na, nb and nc must be positive integers")
+    if sys.argv[6][0]=="-":
+        try:
+            nneigh=-int(sys.argv[6])
+        except ValueError:
+            sys.exit("Error: invalid cutoff")
+        if nneigh==0:
+            sys.exit("Error: invalid cutoff")
+    else:
+        nneigh=None
+        try:
+            frange=float(sys.argv[6])
+        except ValueError:
+            sys.exit("Error: invalid cutoff")
+        if frange==0.:
+            sys.exit("Error: invalid cutoff")
+    print "Reading {}".format(ufilename)
+    poscar=read_qe_in(ufilename)
+    natoms=len(poscar["types"])
+    print "Analyzing symmetries"
+    symops=thirdorder_core.SymmetryOperations(
+        poscar["lattvec"],poscar["types"],
+        poscar["positions"].T)
+    print "- Symmetry group {} detected".format(symops.symbol)
+    print "- {} symmetry operations".format(symops.translations.shape[0])
+    print "Creating the supercell"
+    sposcar=gen_supercell(poscar,na,nb,nc)
+    ntot=natoms*na*nb*nc
+    print "Computing all distances in the supercell"
+    dmin,nequi,shifts=calc_dists(sposcar)
+    if nneigh!=None:
+        frange=calc_frange(poscar,sposcar,nneigh,dmin)
+        print "- Automatic cutoff: {} nm".format(frange)
+    else:
+        print "- User-defined cutoff: {} nm".format(frange)
+    print "Calling wedge()"
+    wedgeres=thirdorder_core.pywedge(poscar,sposcar,symops,frange)
+    print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
+    list4=build_list4(wedgeres)
+    nirred=len(list4)
+    nruns=4*nirred
+    print "- {} DFT runs are needed".format(nruns)
+    if action=="sow":
+        print sowblock
+        print "Writing undisplaced coordinates to BASE.{}".format(sfilename)
+        write_supercell(sfilename,sposcar,"BASE.{}".format(sfilename))
+        width=len(str(4*(len(list4)+1)))
+        namepattern="DISP.{}.{{0:0{}d}}".format(sfilename,width)
+        print "Writing displaced coordinates to DISP.{}.*".format(sfilename)
+        for i,e in enumerate(list4):
+            for n in range(4):
+                isign=(-1)**(n//2)
+                jsign=-(-1)**(n%2)
+                # Start numbering the files at 1 for aesthetic
+                # reasons.
+                number=nirred*n+i+1
+                dsposcar=move_two_atoms(sposcar,
+                                        e[1],e[3],isign*H,
+                                        e[0],e[2],jsign*H)
+                filename=namepattern.format(number)
+                write_supercell(sfilename,dsposcar,filename)
+    else:
+        print reapblock
+        print "Waiting for a list of QE output files on stdin"
+        filelist=[]
+        for l in sys.stdin:
+            s=l.strip()
+            if len(s)==0:
+                continue
+            filelist.append(s)
+        nfiles=len(filelist)
+        print "- {} filenames read".format(nfiles)
+        if nfiles!=nruns:
+            sys.exit("Error: {} filenames were expected".
+                     format(nruns))
+        for i in filelist:
+            if not os.path.isfile(i):
+                sys.exit("Error: {} is not a regular file".
+                         format(i))
+        print "Reading the forces"
+        forces=[]
+        for i in filelist:
+            forces.append(read_forces(i))
+            print "- {} read successfully".format(i)
+            res=forces[-1].mean(axis=0)
+            print "- \t Average residual force:"
+            print "- \t {} eV/(nm * atom)".format(res)
+        print "Computing an irreducible set of anharmonic force constants"
+        phipart=numpy.zeros((3,nirred,ntot))
+        for i,e in enumerate(list4):
+            for n in range(4):
+                isign=(-1)**(n//2)
+                jsign=-(-1)**(n%2)
+                number=nirred*n+i
+                phipart[:,i,:]-=isign*jsign*forces[number].T
+        phipart/=(4000.*H*H)
+        print "Reconstructing the full matrix"
+        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        print "Writing the constants to FORCE_CONSTANTS_3RD"
+        write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
+    print doneblock
