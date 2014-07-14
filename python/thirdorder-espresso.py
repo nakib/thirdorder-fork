@@ -4,6 +4,7 @@
 #  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
 #  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
 #  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#  Copyright (C) 2014      Antti J. Karttunen <antti.j.karttunen@iki.fi>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,10 +26,9 @@ import glob
 import thirdorder_core
 from thirdorder_common import *
 
-
-BOHR_RADIUS=5.29e-2 # nm
-RYDBERG=13.605 # eV
-
+# Conversion factors (source: CODATA 2010)
+BOHR_RADIUS=5.2917721092e-2 # nm
+RYDBERG=13.60569253 # eV
 
 def qe_cell(ibrav,celldm):
     """
@@ -189,7 +189,7 @@ def read_qe_in(filename):
     tagre=lambda keyword:re.compile(
         re.escape(keyword)+
         r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",re.MULTILINE)
-    kindre=re.compile(r"[\{\(]\s*(?P<kind>\S+)\s*[\}\)]")
+    kindre=re.compile(r"\S+\s+[\{\(\s]*(?P<kind>\w+)[\}\)\s]*")
     contents=open(filename,"r").read()
     try:
         ibrav=int(tagre("ibrav").search(contents).group("value"))
@@ -207,12 +207,20 @@ def read_qe_in(filename):
     for m in celldmre.finditer(contents):
         res=m.groupdict()
         celldm[int(res["number"])]=float(res["value"])
-    celldm[1]*=BOHR_RADIUS
     nruter=dict()
-    nruter["lattvec"]=qe_cell(ibrav,celldm).T*celldm[1]
+    if len(celldm) > 0:
+        # celldm is not required for ibrav==0
+        # (except for CELL_PARAMETERS alat, for which it's checked below)
+        celldm[1]*=BOHR_RADIUS
+    if ibrav == 0:
+        # CELL_PARAMETERS are read in below after ATOMIC_POSITIONS
+        nruter["lattvec"]=numpy.empty((3,3))
+    else:
+        nruter["lattvec"]=qe_cell(ibrav,celldm).T*celldm[1]
     nruter["positions"]=numpy.empty((3,natoms))
     nruter["elements"]=[]
     lines=contents.split("\n")
+    # Read ATOMIC_POSITIONS
     reading=False
     read=0
     for l in lines:
@@ -224,21 +232,58 @@ def read_qe_in(filename):
             if read==natoms:
                 break
         if l.startswith("ATOMIC_POSITIONS"):
+            print 
             try:
-                kind=kindre.search(l).group("kind")
+                poskind=kindre.search(l).group("kind")
             except AttributeError:
-                kind="alat"
-            if kind not in ("alat","bohr","angstrom","crystal"):
+                raise ValueError("Type of ATOMIC_POSITIONS missing")
+            if poskind not in ("alat","bohr","angstrom","crystal"):
                 raise ValueError("cannot interpret coordinates in \"{}\" format"
-                                 .format(kind))
+                                 .format(poskind))
             reading=True
-    if kind=="alat":
+    # Sanity check
+    if read < natoms:
+      raise ValueError("Proper ATOMIC_POSITIONS not found (expected: {}; found: {}"
+                       .format(natoms, read))
+    # Read CELL_PARAMETERS if ibrav == 0
+    reading=False
+    read=0
+    if ibrav == 0:
+        for l in lines:
+            if reading:
+                fields=l.split()
+                nruter["lattvec"][:,read]=[float(i) for i in fields[0:3]]
+                read=read+1
+                if read==3:
+                    # Convert lattvec to nm units
+                    if latkind=="alat":
+                        nruter["lattvec"]*=celldm[1]
+                    elif latkind=="bohr":
+                        nruter["lattvec"]*=BOHR_RADIUS
+                    elif latkind=="angstrom":
+                        nruter["lattvec"]*=.1
+                    break
+            if l.startswith("CELL_PARAMETERS"):
+                try:
+                    latkind=kindre.search(l).group("kind")
+                except AttributeError:
+                    raise ValueError("Type of CELL_PARAMETERS missing")
+                if latkind not in ("alat","bohr","angstrom"):
+                    raise ValueError("cannot interpret cell parameters in \"{}\" format"
+                                     .format(latkind))
+                if latkind == "alat" and len(celldm) == 0:
+                    raise ValueError("CELL_PARAMETERS alat requires celldm[1]")
+                reading=True
+        if read < 3:
+            raise ValueError("Proper CELL_PARAMETERS not found")  
+    # Lattvec has been determined, finalize positions
+    if poskind=="alat":
         nruter["positions"]*=celldm[1]
-    elif kind=="bohr":
+    elif poskind=="bohr":
         nruter["positions"]*=BOHR_RADIUS
-    elif kind=="angstrom":
+    elif poskind=="angstrom":
         nruter["positions"]*=.1
-    if kind!="crystal":
+    if poskind!="crystal":
         nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
                                                nruter["positions"])
     aux=collections.OrderedDict()
@@ -288,11 +333,11 @@ def write_supercell(templatefile,poscar,filename):
         if i not in text:
             raise ValueError("the template does not contain a {} tag".format(i))
     text=text.replace("##NATOMS##",str(len(poscar["types"])))
-    celltext="CELL_PARAMETERS {angstrom}\n"+"\n".join([
+    celltext="CELL_PARAMETERS angstrom\n"+"\n".join([
             " ".join(["{0:>20.15g}".format(10.*i) for i in j]) for j in poscar["lattvec"].T.tolist()
             ])
     text=text.replace("##CELL##",celltext)
-    coordtext="ATOMIC_POSITIONS {crystal}\n"+"\n".join([
+    coordtext="ATOMIC_POSITIONS crystal\n"+"\n".join([
             e+" "+" ".join(["{0:>20.15g}".format(i) for i in j]) for e,j in zip(poscar["elements"],
                                                                                 poscar["positions"].T.tolist())
             ])
