@@ -22,6 +22,7 @@
 import os.path
 import re
 import glob
+import ast
 
 import thirdorder_core
 from thirdorder_common import *
@@ -179,6 +180,48 @@ def qe_cell(ibrav,celldm):
         raise ValueError("unknown ibrav")
     return nruter
 
+def eval_qe_algebraic(expression):
+    """
+    Return the value of an algebraic expression of
+    the kind allowed by Quantum Espresso for coordinates.
+    """
+    # Perform basic checks on the expression.
+    if len(expression)==0:
+        raise ValueError("empty expression")
+    validchars="0123456789.eEdD+-*/^()"
+    for i in expression:
+        if i not in validchars:
+            raise ValueError("invalid character \"{}\" in algebraic expression"
+                             .format(i))
+    if expression[0]=="+":
+        raise ValueError("expression starts with +")
+    # Translate the exponential notantion and the power operator into Python.
+    expr=expression.lower().replace("d","e").replace("^","**")
+    # Evaluate the result in a safe manner.
+    def eval_node(node):
+        """
+        Evaluate each node in the expression, recursing down if needed.
+        """
+        if isinstance(node,ast.Expression):
+            return eval_node(node.body)
+        elif isinstance(node,ast.Num):
+            return float(node.n)
+        elif isinstance(node,ast.BinOp):
+            if type(node.op)==ast.Add:
+                return eval_node(node.left)+eval_node(node.right)
+            elif type(node.op)==ast.Sub:
+                return eval_node(node.left)-eval_node(node.right)
+            elif type(node.op)==ast.Mult:
+                return eval_node(node.left)*eval_node(node.right)
+            elif type(node.op)==ast.Div:
+                return eval_node(node.left)/eval_node(node.right)
+            elif type(node.op)==ast.Pow:
+                return eval_node(node.left)**eval_node(node.right)
+            else:
+                raise ValueError("invalid binary operator")
+        else:
+            raise ValueError("invalid node in the parse tree")
+    return eval_node(ast.parse(expr,mode="eval").body)
 
 def read_qe_in(filename):
     """
@@ -227,7 +270,7 @@ def read_qe_in(filename):
         if reading:
             fields=l.split()
             nruter["elements"].append(fields[0])
-            nruter["positions"][:,read]=[float(i) for i in fields[1:4]]
+            nruter["positions"][:,read]=[eval_qe_algebraic(i) for i in fields[1:4]]
             read=read+1
             if read==natoms:
                 break
