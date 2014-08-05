@@ -1,7 +1,9 @@
 # thirdorder #
 
 The purpose of the thirdorder script is to help users of [ShengBTE](https://bitbucket.org/sousaw/shengbte) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks: 
+
 1) It resolves an irreducible set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. The displaced supercells are saved to to input files that can be fed to first-principles DFT codes for calculating the forces arising from the atomic displacements. Currently supported DFT codes are VASP (thirdorder_vasp.py) and Quantum ESPRESSO (thirdorder_espresso.py)
+
 2) From the output files created by the DFT code, thirdorder reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
 
 # Compilation #
@@ -53,7 +55,7 @@ Direct
 Let us assume that such POSCAR is in the current directory and that thirdorder.py is in our PATH. To generate an irreducible set of displacements for a 4x4x4 supercell and up-to-third-neighbor interactions, we run
 
 ```
-thirdorder.py sow 4 4 4 -3
+thirdorder_vasp.py sow 4 4 4 -3
 ```
 
 This creates a file called 3RD.SPOSCAR with the undisplaced supercell coordinates and 144 files with names following the pattern 3RD.POSCAR.*. It is the latter that need to be input to VASP. This step is completely system-dependent, but suppose that in ~/vaspinputs we have the required INCAR, POTCAR and KPOINTS files as well as a runvasp.sh script that can be passed to qsub. We can run a command sequence like:
@@ -75,7 +77,7 @@ done
 Some time later, after all these jobs have finished successfully, we only need to feed all the vasprun.xml files in the right order to thirdorder.py, this time in reap mode:
 
 ```
-find job* -name vasprun.xml|sort -n|thirdorder.py reap 4 4 4 -3
+find job* -name vasprun.xml|sort -n|thirdorder_vasp.py reap 4 4 4 -3
 ```
 
 If everything goes according to plan, a FORCE\_CONSTANTS\_3RD file will be created at the end of this run. Naturally, it is important to choose the same parameters for the sow and reap steps.
@@ -83,7 +85,9 @@ If everything goes according to plan, a FORCE\_CONSTANTS\_3RD file will be creat
 # Running thirdorder with Quantum ESPRESSO #
 
 The invocation of thirdorder_espresso.py requires two files: 
+
 1) an input file of the unit cell with converged structural parameters
+
 2) a template input file for the supercell calculations. The template file is a normal QE input file with some wildcards
 
 The following input file InAs.in describes the relaxed geometry of the primitive unit cell of InAs, a III-V semiconductor with a zincblende structure
@@ -121,12 +125,14 @@ CELL_PARAMETERS angstrom
 ```
 
 thirdorder_espresso.py supports the following QE input conventions for structural parameters:
-1) ibrav == 0 together with CELL_PARAMETERS (alat | bohr | angstrom)
+
+1) ibrav = 0 together with CELL_PARAMETERS (alat | bohr | angstrom)
+
 2) ibrav != 0 together with celldm(1)-celldm(6)
 
-For ATOMIC_POSITIONS, all QE units are supported (alat | bohr | angstrom | crystal). Simple algebraic expressions for the positions are supported in similar fashion to QE. Please note that ibrav == 11..14  have not been tested so far with thirdorder_espresso.py (please report if you run these cases successfully or run into problems). Cases ibrav == -5, -9, -12, -13, and 91 are not currently implemented (but the structures can be defined via ibrav == 0 instead) 
+For ATOMIC_POSITIONS, all QE units are supported (alat | bohr | angstrom | crystal). Simple algebraic expressions for the positions are supported in similar fashion to QE. Please note that ibrav = 11..14  have not been tested so far with thirdorder_espresso.py (please report if you run these cases successfully or run into problems). Cases ibrav = -5, -9, -12, -13, and 91 are not currently implemented (but the structures can be defined via ibrav = 0 instead) 
 
-The following supercell template InAs_sc.in is used for creating the supercell input files:
+The following supercell template InAs_sc.in is used for creating the supercell input files (note the ##WILDCARDS##):
 
 ```
 &CONTROL
@@ -161,10 +167,10 @@ Thirdorder uses no other configuration files, and requires seven mandatory comma
 thirdorder_espresso.py unitcell.in sow na nb nc cutoff[nm/-integer] supercell_template.in
 ```
 
-Please see the above description for VASP for the explanation of the parameters na, nb, nc, and cutoff. For the present example, we execute:
+Please see the above description for VASP for the explanation of the parameters na, nb, nc, and cutoff. For the present InAs example, we execute:
 
 ```
-thirdorder_espresso.py InAs.in sow 4 4 4 -3 InAs_s.in
+thirdorder_espresso.py InAs.in sow 4 4 4 -3 InAs_sc.in
 ```
 The command creates a file called BASE.InAs_sc.in with the undisplaced supercell coordinates and 144 files with names following the pattern DISP.InAs_sc.in.NNN The DISP files should be executed with QE. This step is completely system-dependent, but some practical suggestions can be found from the VASP example above.
 
