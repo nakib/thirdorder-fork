@@ -223,6 +223,7 @@ def eval_qe_algebraic(expression):
             raise ValueError("invalid node in the parse tree")
     return eval_node(ast.parse(expr,mode="eval").body)
 
+
 def read_qe_in(filename):
     """
     Return all the relevant information about the system from a QE
@@ -286,7 +287,7 @@ def read_qe_in(filename):
             reading=True
     # Sanity check
     if read < natoms:
-      raise ValueError("Proper ATOMIC_POSITIONS not found (expected: {}; found: {}"
+      raise ValueError("Proper ATOMIC_POSITIONS not found (expected: {}; found: {})"
                        .format(natoms, read))
     # Read CELL_PARAMETERS if ibrav == 0
     reading=False
@@ -315,7 +316,7 @@ def read_qe_in(filename):
                     raise ValueError("cannot interpret cell parameters in \"{}\" format"
                                      .format(latkind))
                 if latkind == "alat" and len(celldm) == 0:
-                    raise ValueError("CELL_PARAMETERS alat requires celldm[1]")
+                    raise ValueError("CELL_PARAMETERS alat requires celldm(1)")
                 reading=True
         if read < 3:
             raise ValueError("Proper CELL_PARAMETERS not found")  
