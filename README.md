@@ -88,12 +88,12 @@ The invocation of thirdorder_espresso.py requires two files:
 
 2) a template input file for the supercell calculations. The template file is a normal QE input file with some wildcards
 
-The following input file InAs.in describes the relaxed geometry of the primitive unit cell of InAs, a III-V semiconductor with a zincblende structure
+The following input file GaAs.in describes the relaxed geometry of the primitive unit cell of GaAs, a III-V semiconductor with a zincblende structure
 
 ```
 &CONTROL
  calculation='scf',
- prefix='inas',
+ prefix='gaas',
  restart_mode='from_scratch',
  tstress = .true.,
  tprnfor = .true.,
@@ -102,24 +102,24 @@ The following input file InAs.in describes the relaxed geometry of the primitive
  ibrav=0,
  nat=2,
  ntyp=2,
- ecutwfc=24.0,
+ ecutwfc=48
+ ecutrho=384
 /
 &ELECTRONS
  conv_thr=1.d-12,
 /
 ATOMIC_SPECIES
- As  74.92160  As.pz-bhs.UPF
- In  114.818   In.pz-n-bhs.UPF
+ Ga  69.723    Ga.pbe-dnl-kjpaw_psl.1.0.0.UPF
+ As  74.92160  As.pbe-dn-kjpaw_psl.1.0.0.UPF
 ATOMIC_POSITIONS crystal
- In 0.00 0.00 0.00
+ Ga 0.00 0.00 0.00
  As 0.25 0.25 0.25
 K_POINTS automatic
-4 4 4 0 0 0
+11 11 11 0 0 0
 CELL_PARAMETERS angstrom
- 0.000000000   2.974830121   2.974830121
- 2.974830121   0.000000000   2.974830121
- 2.974830121   2.974830121   0.000000000
-
+   0.000000000   2.857507756   2.857507756
+   2.857507756   0.000000000   2.857507756
+   2.857507756   2.857507756   0.000000000
 ```
 
 thirdorder_espresso.py supports the following QE input conventions for structural parameters:
@@ -130,12 +130,12 @@ thirdorder_espresso.py supports the following QE input conventions for structura
 
 For ATOMIC_POSITIONS, all QE units are supported (alat | bohr | angstrom | crystal). Simple algebraic expressions for the positions are supported in similar fashion to QE. Please note that ibrav = 11..14  have not been tested so far with thirdorder_espresso.py (please report if you run these cases successfully or run into problems). Cases ibrav = -5, -9, -12, -13, and 91 are not currently implemented (but those structures can be defined via ibrav = 0 instead) 
 
-The following supercell template InAs_sc.in is used for creating the supercell input files (note the ##WILDCARDS##):
+The following supercell template GaAs_sc.in is used for creating the supercell input files (note the ##WILDCARDS##):
 
 ```
 &CONTROL
   calculation='scf',
-  prefix='inas',
+  prefix='gaas',
   tstress = .true.,
   tprnfor = .true.,
 /
@@ -143,14 +143,15 @@ The following supercell template InAs_sc.in is used for creating the supercell i
   ibrav=0,
   nat=##NATOMS##,
   ntyp=2,
-  ecutwfc=24.0,
+  ecutwfc=48
+  ecutrho=384
 /
 &ELECTRONS
   conv_thr=1.d-12,
 /
 ATOMIC_SPECIES
- As  74.92160  As.pz-bhs.UPF
- In  114.818   In.pz-n-bhs.UPF
+ As  74.92160  As.pbe-dn-kjpaw_psl.1.0.0.UPF	
+ Ga  69.723    Ga.pbe-dnl-kjpaw_psl.1.0.0.UPF
 ##COORDINATES##
 K_POINTS gamma
 ##CELL##
@@ -165,17 +166,17 @@ Thirdorder uses no other configuration files, and requires seven mandatory comma
 thirdorder_espresso.py unitcell.in sow na nb nc cutoff[nm/-integer] supercell_template.in
 ```
 
-Please see the above description for VASP for the explanation of the parameters na, nb, nc, and cutoff. For the present InAs example, we execute:
+Please see the above description for VASP for the explanation of the parameters na, nb, nc, and cutoff. For the present GaAs example, we execute:
 
 ```
-thirdorder_espresso.py InAs.in sow 4 4 4 -3 InAs_sc.in
+thirdorder_espresso.py GaAs.in sow 4 4 4 -3 GaAs_sc.in
 ```
-The command creates a file called BASE.InAs_sc.in with the undisplaced supercell coordinates and 144 files with names following the pattern DISP.InAs_sc.in.NNN The DISP files should be executed with QE. This step is completely system-dependent, but some practical suggestions can be extracted from the VASP example above.
+The command creates a file called BASE.GaAs_sc.in with the undisplaced supercell coordinates and 144 files with names following the pattern DISP.GaAs_sc.in.NNN The DISP files should be executed with QE. This step is completely system-dependent, but some practical suggestions can be extracted from the VASP example above.
 
 After all the jobs have finished successfully, we only need to feed all the output files in the right order to thirdorder_espresso.py, this time in reap mode (now using only six arguments, the supercell argument is not used here):
 
 ```
-find . -name 'DISP.InAs_sc.in*out' | sort -n | thirdorder_espresso.py InAs.in reap 4 4 4 -3
+find . -name 'DISP.GaAs_sc.in*out' | sort -n | thirdorder_espresso.py GaAs.in reap 4 4 4 -3
 ```
 If everything goes according to plan, a FORCE_CONSTANTS_3RD file will be created at the end of this run. Naturally, it is important to choose the same parameters for the sow and reap steps.
 
