@@ -545,13 +545,8 @@ contains
     real(kind=C_DOUBLE),intent(in) :: Coord(3,Natom)
     real(kind=C_DOUBLE),intent(out) :: Car(3)
 
-    integer(kind=C_INT) :: i
-
-    do i=1,Natom
-       if(Ind_atom.eq.i) then
-          Car=Ind_cell(1)*LatVec(:,1)+Ind_cell(2)*LatVec(:,2)+Ind_cell(3)*LatVec(:,3)+Coord(:,i)
-       end if
-    end do
+    Car=Ind_cell(1)*LatVec(:,1)+Ind_cell(2)*LatVec(:,2)&
+         +Ind_cell(3)*LatVec(:,3)+Coord(:,Ind_atom)
   end subroutine Lattice2Car
 
   ! Generate a mapping between unit cell+atom indices to atom indices
