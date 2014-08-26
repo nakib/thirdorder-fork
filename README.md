@@ -16,7 +16,7 @@ An arch.make file is required for compilation. An example is provided with the d
 export FC=gfortran
 export FFLAGS=-g -O2 -fPIC  -fbounds-check 
 export CFLAGS=-I/home/user/local/include
-export LDFLAGS=-L/home/user/local/lib -llapack -lgfortran
+export LDFLAGS=-L/home/user/local/lib -lgfortran
 ```
 
 The first line specifies the name of the Fortran compiler, in this case GNU Fortran, and the second lists the flags to be passed to it for compiling Fortran code. Especially relevant here is -fPIC, which ensures that the resulting object file can be linked into a dynamic library. Note that a reasonably recent Fortran compiler is needed because explicit C compatibility (iso\_c\_binding) is used; gfortran 4.8.2 and ifort 12.0.0 are known to work. The remaining two lines are flags to be passed to the C compiler in the compilation and linking stages, respectively. thirdorder uses Atsushi Togo's [spglib](http://spglib.sourceforge.net/), which must be available both at compilation and run time: make sure to include the pertinent -L flag among LDFLAGS, and to specify the path to libsymspg.so in your LD\_LIBRARY\_PATH environment variable. Finally, note that -lgfortran is needed when using gfortran.
