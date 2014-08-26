@@ -181,7 +181,8 @@ def pywedge(poscar,sposcar,symops,frange):
     """
     cdef double ForceRange
     cdef int Ngrid1,Ngrid2,Ngrid3,Nsymm,Natoms,Ntot,Nlist,Allocsize
-    cdef double LatVec[3][3],
+    cdef double LatVec[3][3]
+    cdef double InvLatVec[3][3]
     cdef double (*Coord)[3]
     cdef double (*CoordAll)[3]
     cdef double (*Orth)[3][3]
@@ -217,6 +218,10 @@ def pywedge(poscar,sposcar,symops,frange):
     for i in range(3):
         for j in range(3):
             LatVec[j][i]=poscar["lattvec"][i,j]
+    ilv=scipy.linalg.inv(poscar["lattvec"])
+    for i in range(3):
+        for j in range(3):
+            InvLatVec[j][i]=ilv[i,j]
     for i in range(Natoms):
         for j in range(3):
             Coord[i][j]=cpos[j,i]
@@ -228,7 +233,7 @@ def pywedge(poscar,sposcar,symops,frange):
             Trans[i][j]=symops.translations[i,j]
             for k in range(3):
                 Orth[i][k][j]=crotations[i,j,k]
-    cthirdorder_core.wedge(LatVec,Coord,CoordAll,Orth,Trans,Natoms,
+    cthirdorder_core.wedge(LatVec,InvLatVec,Coord,CoordAll,Orth,Trans,Natoms,
                            &Nlist,&vNequi,&vList,
                            &vALLEquiList,&vTransformationArray,
                            &vNIndependentBasis,&vIndependentBasis,

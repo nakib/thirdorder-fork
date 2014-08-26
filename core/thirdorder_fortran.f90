@@ -34,14 +34,15 @@ contains
   ! the rest of the output arguments are necessary for the
   ! reconstruction since they describe the equivalences and
   ! transformation rules between atomic triplets.
-  subroutine wedge(LatVec,Coord,CoordAll,Orth,Trans,Natoms,Nlist,cNequi,cList,&
+  subroutine wedge(LatVec,InvLatVec,Coord,CoordAll,&
+       Orth,Trans,Natoms,Nlist,cNequi,cList,&
        cALLEquiList,cTransformationArray,cNIndependentBasis,&
        cIndependentBasis,Ngrid1,Ngrid2,Ngrid3,Nsymm,&
        ForceRange,Allocsize) bind(C,name="wedge")
     implicit none
 
     real(kind=C_DOUBLE),value,intent(in) :: ForceRange
-    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),Orth(3,3,Nsymm),Trans(3,Nsymm)
+    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),InvLatVec(3,3),Orth(3,3,Nsymm),Trans(3,Nsymm)
     integer(kind=C_INT),value,intent(in) :: Natoms,Ngrid1,Ngrid2,Ngrid3,Nsymm
     real(kind=C_DOUBLE),intent(in) :: Coord(3,Natoms),CoordAll(3,Natoms*Ngrid1*Ngrid2*Ngrid3)
     integer(kind=C_INT),intent(out) :: NList,Allocsize
@@ -76,8 +77,6 @@ contains
     real(kind=C_DOUBLE) :: dist,dist1,dist_min,Car2(3),Car3(3)
     logical :: NonZero
 
-    real(kind=C_DOUBLE) :: dnrm2
-
     Allocsize=4
     AllAllocsize=4
 
@@ -101,7 +100,7 @@ contains
 
     ! Symmetry operations are applied to the set of atomic positions
     ! to determine which is mapped into which by each operation.
-    call symmetry(Nsymm,Natoms,LatVec,Coord,ID_equi,&
+    call symmetry(Nsymm,Natoms,LatVec,InvLatVec,Coord,ID_equi,&
          Ngrid1,Ngrid2,Ngrid3,Orth,Trans)
     call Id2Ind(Ind_cell,Ind_species,Ngrid1,Ngrid2,Ngrid3,Natoms)
 
@@ -118,10 +117,10 @@ contains
           do ix=-1,1
              do iy=-1,1
                 do iz=-1,1
-                   dist=dnrm2(3,ix*Ngrid1*LatVec(1:3,1)+&
+                   dist=norm(ix*Ngrid1*LatVec(1:3,1)+&
                         iy*Ngrid2*LatVec(1:3,2)+&
                         iz*Ngrid3*LatVec(1:3,3)+&
-                        CoordAll(1:3,jj)-CoordAll(1:3,ii),1)
+                        CoordAll(1:3,jj)-CoordAll(1:3,ii))
                    if(dist.lt.dist_min) then
                       dist_min=dist
                    end if
@@ -131,10 +130,10 @@ contains
           do ix=-1,1
              do iy=-1,1
                 do iz=-1,1
-                   dist=dnrm2(3,ix*Ngrid1*LatVec(1:3,1)+&
+                   dist=norm(ix*Ngrid1*LatVec(1:3,1)+&
                         iy*Ngrid2*LatVec(1:3,2)+&
                         iz*Ngrid3*LatVec(1:3,3)+&
-                        CoordAll(1:3,jj)-CoordAll(1:3,ii),1)
+                        CoordAll(1:3,jj)-CoordAll(1:3,ii))
                    if(abs(dist-dist_min).lt.1.d-2) then
                       N2equi=N2equi+1
                       shift2all(:,N2equi)=(/ix,iy,iz/)
@@ -150,10 +149,10 @@ contains
                 do ix=-1,1
                    do iy=-1,1
                       do iz=-1,1
-                         dist=dnrm2(3,ix*Ngrid1*LatVec(1:3,1)+&
+                         dist=norm(ix*Ngrid1*LatVec(1:3,1)+&
                               iy*Ngrid2*LatVec(1:3,2)+&
                               iz*Ngrid3*LatVec(1:3,3)+&
-                              CoordAll(1:3,kk)-CoordAll(1:3,ii),1)
+                              CoordAll(1:3,kk)-CoordAll(1:3,ii))
                          if(dist.lt.dist_min) then
                             dist_min=dist
                          end if
@@ -163,10 +162,10 @@ contains
                 do ix=-1,1
                    do iy=-1,1
                       do iz=-1,1
-                         dist=dnrm2(3,ix*Ngrid1*LatVec(1:3,1)+&
+                         dist=norm(ix*Ngrid1*LatVec(1:3,1)+&
                               iy*Ngrid2*LatVec(1:3,2)+&
                               iz*Ngrid3*LatVec(1:3,3)+&
-                              CoordAll(1:3,kk)-CoordAll(1:3,ii),1)
+                              CoordAll(1:3,kk)-CoordAll(1:3,ii))
                          if(abs(dist-dist_min).lt.1.d-2) then
                             N3equi=N3equi+1
                             shift3all(:,N3equi)=(/ix,iy,iz/)
@@ -184,7 +183,7 @@ contains
                       Car3=shift3all(1,jaux)*Ngrid1*LatVec(:,1)+&
                            shift3all(2,jaux)*Ngrid2*LatVec(:,2)+&
                            shift3all(3,jaux)*Ngrid3*LatVec(:,3)+CoordAll(1:3,kk)
-                      dist1=dnrm2(3,Car3-Car2,1)
+                      dist1=norm(Car3-Car2)
                       if(dist1.lt.dist_min) then
                          dist_min=dist1
                          shift2=shift2all(:,iaux)
@@ -456,12 +455,12 @@ contains
   ! Each symmetry operation defines a mapping between atom indices in
   ! the supercell. This subroutine fills a matrix with those
   ! permutations.
-  subroutine symmetry(Nsymm,Natoms,LatVec,Coord,ID_equi,&
+  subroutine symmetry(Nsymm,Natoms,LatVec,InvLatVec,Coord,ID_equi,&
        Ngrid1,Ngrid2,Ngrid3,Orth,Trans)
     implicit none
 
     integer(kind=C_INT),intent(in) :: Nsymm,Natoms,Ngrid1,Ngrid2,Ngrid3
-    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),Coord(3,Natoms)
+    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),InvLatVec(3,3),Coord(3,Natoms)
     real(kind=C_DOUBLE),intent(in) :: Orth(3,3,Nsymm),Trans(3,Nsymm)
     integer(kind=C_INT),intent(out) :: ID_equi(Nsymm,Natoms*Ngrid1*Ngrid2*Ngrid3)
 
@@ -478,7 +477,8 @@ contains
        call Lattice2Car(Natoms,LatVec,Coord,vec,ispecies,Car)
        call symm(Nsymm,LatVec,Car,Car_sym,Orth,Trans)
        do isym=1,Nsymm
-          call Car2Lattice(Natoms,LatVec,Coord,vec,ispecies_sym,Car_sym(:,isym))
+          call Car2Lattice(Natoms,LatVec,InvLatVec,Coord,vec,ispecies_sym,&
+               Car_sym(:,isym))
           vec(1)=modulo(vec(1),Ngrid1)
           vec(2)=modulo(vec(2),Ngrid2)
           vec(3)=modulo(vec(3),Ngrid3)
@@ -507,22 +507,22 @@ contains
 
   ! Return the unit cell and atom indices of an element of the
   ! supercell based on its Cartesian coordinates.
-  subroutine Car2Lattice(Natoms,LatVec,Coord,Ind_cell,Ind_atom,Car)
+  subroutine Car2Lattice(Natoms,LatVec,InvLatVec,Coord,Ind_cell,Ind_atom,Car)
     implicit none
 
     integer(kind=C_INT),intent(in) :: Natoms
-    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),Coord(3,Natoms),Car(3)
+    real(kind=C_DOUBLE),intent(in) :: LatVec(3,3),InvLatVec(3,3)
+    real(kind=C_DOUBLE),intent(in) :: Coord(3,Natoms),Car(3)
     integer(kind=C_INT),intent(out) :: Ind_cell(3),Ind_atom
 
-    real(kind=C_DOUBLE) :: displ(3),dist,tmp1(3,3),tmp2(3,Natoms)
+    real(kind=C_DOUBLE) :: displ(3),dist,tmp2(3,Natoms)
     integer(kind=C_INT) :: i,piv(3)
 
     Ind_atom=0
-    tmp1=LatVec
     do i=1,Natoms
        tmp2(:,i)=Car-Coord(:,i)
     end do
-    call dgesv(3,Natoms,tmp1,3,piv,tmp2,3,i)
+    tmp2=matmul(InvLatVec,tmp2)
     do i=1,Natoms
        ind_cell=nint(tmp2(:,i))
        displ=Ind_cell(1)*LatVec(:,1)+Ind_cell(2)*LatVec(:,2)+&
@@ -657,4 +657,14 @@ contains
        end do
     end if
   end subroutine gaussian
+
+  ! Naive implementation of the Euclidean norm. Stability is not a
+  ! concern, since we expect very particular kinds of vector.
+  real(kind=C_DOUBLE) function norm(vector)
+    implicit none
+
+    real(kind=C_DOUBLE) vector(:)
+
+    norm=sqrt(dot_product(vector,vector))
+  end function norm
 end module thirdorder_fortran
