@@ -27,15 +27,17 @@
 from libc.stdlib cimport malloc,free
 from libc.math cimport round,fabs,sqrt
 
-import numpy
-import scipy
+import copy
+
+import numpy as np
+import scipy as sp
 import scipy.linalg
 import scipy.sparse
 import scipy.sparse.linalg
 
 cimport cython
-cimport numpy
-numpy.import_array()
+cimport numpy as np
+np.import_array()
 cimport cthirdorder_core
 
 # NOTE: all indices used in this module are zero-based.
@@ -66,25 +68,25 @@ cdef class SymmetryOperations:
 
   property lattice_vectors:
       def __get__(self):
-          return numpy.asarray(self.__lattvectors)
+          return np.asarray(self.__lattvectors)
   property types:
       def __get__(self):
-          return numpy.asarray(self.__lattvectors)
+          return np.asarray(self.__lattvectors)
   property positions:
       def __get__(self):
-          return numpy.asarray(self.__positions)
+          return np.asarray(self.__positions)
   property origin_shift:
       def __get__(self):
-          return numpy.asarray(self.__shift)
+          return np.asarray(self.__shift)
   property transformation_matrix:
       def __get__(self):
-          return numpy.asarray(self.__transform)
+          return np.asarray(self.__transform)
   property rotations:
       def __get__(self):
-          return numpy.asarray(self.__rotations)
+          return np.asarray(self.__rotations)
   property translations:
       def __get__(self):
-          return numpy.asarray(self.__translations)
+          return np.asarray(self.__translations)
 
   cdef void __build_c_arrays(self):
       """
@@ -102,12 +104,12 @@ cdef class SymmetryOperations:
       their C counterparts.
       """
       cdef int i,j
-      for i in range(3):
-          for j in range(3):
+      for i in xrange(3):
+          for j in xrange(3):
               self.c_latvectors[i][j]=self.__lattvectors[i,j]
-      for i in range(self.natoms):
+      for i in xrange(self.natoms):
           self.c_types[i]=self.__types[i]
-          for j in range(3):
+          for j in xrange(3):
               self.c_positions[i][j]=self.__positions[i,j]
 
   cdef void __spg_get_dataset(self) except *:
@@ -129,31 +131,31 @@ cdef class SymmetryOperations:
       if data is NULL:
           raise MemoryError()
       self.symbol=data.international_symbol.encode("ASCII").strip()
-      self.__shift=numpy.empty((3,),dtype=numpy.float64)
-      self.__transform=numpy.empty((3,3),dtype=numpy.float64)
+      self.__shift=np.empty((3,),dtype=np.float64)
+      self.__transform=np.empty((3,3),dtype=np.float64)
       self.nsyms=data.n_operations
-      self.__rotations=numpy.empty((self.nsyms,3,3),
-                                   dtype=numpy.float64)
-      self.__translations=numpy.empty((self.nsyms,3),
-                                      dtype=numpy.float64)
-      for i in range(3):
+      self.__rotations=np.empty((self.nsyms,3,3),
+                                   dtype=np.float64)
+      self.__translations=np.empty((self.nsyms,3),
+                                      dtype=np.float64)
+      for i in xrange(3):
           self.__shift[i]=data.origin_shift[i]
-          for j in range(3):
+          for j in xrange(3):
               self.__transform[i,j]=data.transformation_matrix[i][j]
-      for i in range(self.nsyms):
-          for j in range(3):
+      for i in xrange(self.nsyms):
+          for j in xrange(3):
               self.__translations[i,j]=data.translations[i][j]
-              for k in range(3):
+              for k in xrange(3):
                   self.__rotations[i,j,k]=data.rotations[i][j][k]
       cthirdorder_core.spg_free_dataset(data)
 
   def __cinit__(self,lattvectors,types,positions,symprec=1e-5):
       cdef int i
-      self.__lattvectors=numpy.array(lattvectors,dtype=numpy.float64)
-      self.__types=numpy.array(types,dtype=numpy.int32)
-      self.__positions=numpy.array(positions,dtype=numpy.float64)
-      self.__norms=numpy.empty((3,),dtype=numpy.float64)
-      for i in range(3):
+      self.__lattvectors=np.array(lattvectors,dtype=np.float64)
+      self.__types=np.array(types,dtype=np.int32)
+      self.__positions=np.array(positions,dtype=np.float64)
+      self.__norms=np.empty((3,),dtype=np.float64)
+      for i in xrange(3):
           self.__norms[i]=sqrt(lattvectors[i,0]**2+
                                lattvectors[i,1]**2+
                                lattvectors[i,2]**2)
@@ -195,7 +197,7 @@ def pywedge(poscar,sposcar,symops,frange):
     cdef void *vIndependentBasis
     cdef int i,j,k
 
-    crotations=numpy.empty_like(symops.rotations)
+    crotations=np.empty_like(symops.rotations)
 
     ForceRange=frange
     Ngrid1=sposcar["na"]
@@ -209,29 +211,29 @@ def pywedge(poscar,sposcar,symops,frange):
     Orth=<double(*)[3][3]>malloc(Nsymm*sizeof(double[3][3]))
     Trans=<double(*)[3]>malloc(Nsymm*sizeof(double[3][3]))
 
-    for i in range(Nsymm):
-        crotations[i,:,:]=numpy.dot(
-            scipy.linalg.solve(poscar["lattvec"].T,symops.rotations[i,:,:].T),
+    for i in xrange(Nsymm):
+        crotations[i,:,:]=np.dot(
+            sp.linalg.solve(poscar["lattvec"].T,symops.rotations[i,:,:].T),
             poscar["lattvec"].T).T
-    cpos=numpy.dot(poscar["lattvec"],poscar["positions"])
-    cposall=numpy.dot(sposcar["lattvec"],sposcar["positions"])
-    for i in range(3):
-        for j in range(3):
+    cpos=np.dot(poscar["lattvec"],poscar["positions"])
+    cposall=np.dot(sposcar["lattvec"],sposcar["positions"])
+    for i in xrange(3):
+        for j in xrange(3):
             LatVec[j][i]=poscar["lattvec"][i,j]
-    ilv=scipy.linalg.inv(poscar["lattvec"])
-    for i in range(3):
-        for j in range(3):
+    ilv=sp.linalg.inv(poscar["lattvec"])
+    for i in xrange(3):
+        for j in xrange(3):
             InvLatVec[j][i]=ilv[i,j]
-    for i in range(Natoms):
-        for j in range(3):
+    for i in xrange(Natoms):
+        for j in xrange(3):
             Coord[i][j]=cpos[j,i]
-    for i in range(Ntot):
-        for j in range(3):
+    for i in xrange(Ntot):
+        for j in xrange(3):
             CoordAll[i][j]=cposall[j,i]
-    for i in range(Nsymm):
-        for j in range(3):
+    for i in xrange(Nsymm):
+        for j in xrange(3):
             Trans[i][j]=symops.translations[i,j]
-            for k in range(3):
+            for k in xrange(3):
                 Orth[i][k][j]=crotations[i,j,k]
     cthirdorder_core.wedge(LatVec,InvLatVec,Coord,CoordAll,Orth,Trans,Natoms,
                            &Nlist,&vNequi,&vList,
@@ -249,18 +251,18 @@ def pywedge(poscar,sposcar,symops,frange):
     # C/Python zero-based convention.
     nruter=dict()
     nruter["Nlist"]=int(Nlist)
-    nruter["Nequi"]=numpy.empty(Nlist,dtype=numpy.int32)
+    nruter["Nequi"]=np.empty(Nlist,dtype=np.int32)
     nruter["Nequi"][:]=<int[:Nlist]>vNequi
-    nruter["List"]=numpy.empty((Nlist,3),dtype=numpy.int32)
+    nruter["List"]=np.empty((Nlist,3),dtype=np.int32)
     nruter["List"][:,:]=<int[:Nlist,:3]>vList
-    nruter["ALLEquiList"]=numpy.empty((Nlist,Nsymm*6,3),dtype=numpy.int32)
+    nruter["ALLEquiList"]=np.empty((Nlist,Nsymm*6,3),dtype=np.int32)
     nruter["ALLEquiList"][:,:,:]=<int[:Nlist,:Nsymm*6,:3]>vALLEquiList
-    nruter["TransformationArray"]=numpy.empty((Nlist,Nsymm*6,27,27))
+    nruter["TransformationArray"]=np.empty((Nlist,Nsymm*6,27,27))
     nruter["TransformationArray"][:,:,:,:]=(<double[:Nlist,:Nsymm*6,:27,:27]>
                                             vTransformationArray)
-    nruter["NIndependentBasis"]=numpy.empty(Nlist,dtype=numpy.int32)
+    nruter["NIndependentBasis"]=np.empty(Nlist,dtype=np.int32)
     nruter["NIndependentBasis"][:]=<int[:Nlist]>vNIndependentBasis
-    nruter["IndependentBasis"]=numpy.empty((Nlist,27),dtype=numpy.int32)
+    nruter["IndependentBasis"]=np.empty((Nlist,27),dtype=np.int32)
     nruter["IndependentBasis"][:,:]=<int[:Nlist,:27]>vIndependentBasis
     cthirdorder_core.free_wedge(Allocsize,Nsymm,vNequi,vList,vALLEquiList,
                                 vTransformationArray,vNIndependentBasis,
@@ -293,9 +295,9 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     nlist=wedgeres["Nlist"]
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
-    vnruter=numpy.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=numpy.insert(numpy.cumsum(wedgeres["NIndependentBasis"],
-                                                dtype=numpy.int32),0,[0])
+    vnruter=np.zeros((3,3,3,natoms,ntot,ntot))
+    naccumindependent=np.insert(np.cumsum(wedgeres["NIndependentBasis"],
+                                                dtype=np.int32),0,[0])
     ntotalindependent=naccumindependent[-1]
     vphipart=phipart
     for ii,e in enumerate(list4):
@@ -310,9 +312,9 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                   wedgeres["List"][0,ii],
                                   wedgeres["List"][1,ii],
                                   wedgeres["List"][2,ii]])
-    aphilist=numpy.array(philist)
-    vind1=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
-    vind2=-numpy.ones((natoms,ntot,ntot),dtype=numpy.int32)
+    aphilist=np.array(philist)
+    vind1=-np.ones((natoms,ntot,ntot),dtype=np.int32)
+    vind2=-np.ones((natoms,ntot,ntot),dtype=np.int32)
     vequilist=wedgeres["ALLEquiList"]
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["Nequi"][ii]):
@@ -330,7 +332,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
 
     if nrows*ncols<=MAXDENSE:
         print "- Using a dense QR factorization algorithm"
-        aa=numpy.zeros((nrows,ncols))
+        aa=np.zeros((nrows,ncols))
         vaa=aa
         colindex=0
         for ii in xrange(natoms):
@@ -349,14 +351,14 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                                                      vind2[ii,jj,kk],ix]
                             tribasisindex+=1
                             colindex+=1
-        Q,R,P=scipy.linalg.qr(aa,mode="economic",pivoting=True)
-        nnonzero=(numpy.abs(numpy.diag(R))>=1e-12).sum()
-        bb=numpy.array(Q[:,:nnonzero])
-        D=numpy.diag(aphilist)
-        ones=numpy.ones_like(aphilist)
-        bb=numpy.dot(D,bb)
-        multiplier=-scipy.linalg.lstsq(bb,ones)[0]
-        compensation=numpy.dot(D,numpy.dot(bb,multiplier))
+        Q,R,P=sp.linalg.qr(aa,mode="economic",pivoting=True)
+        nnonzero=(np.abs(np.diag(R))>=1e-12).sum()
+        bb=np.array(Q[:,:nnonzero])
+        D=np.diag(aphilist)
+        ones=np.ones_like(aphilist)
+        bb=np.dot(D,bb)
+        multiplier=-sp.linalg.lstsq(bb,ones)[0]
+        compensation=np.dot(D,np.dot(bb,multiplier))
     else:
         print "- Using a sparse least-squares method"
         i=[]
@@ -382,12 +384,12 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                             tribasisindex+=1
                             colindex+=1
         print "- \t Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
-        aa=scipy.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
-        D=scipy.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
+        aa=sp.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
+        D=sp.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
                                format="csr")
         bbs=D.dot(aa)
-        ones=numpy.ones_like(aphilist)
-        multiplier=-scipy.sparse.linalg.lsqr(bbs,ones)[0]
+        ones=np.ones_like(aphilist)
+        multiplier=-sp.sparse.linalg.lsqr(bbs,ones)[0]
         compensation=D.dot(bbs.dot(multiplier))
 
     aphilist+=compensation
@@ -408,3 +410,402 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                         tribasisindex,ix,jj,ii]*aphilist[
                                             naccumindependent[ii]+ix]
     return vnruter
+
+
+import sys
+
+#### Experimental section: Cython replacements of old Fortran functions.
+def nofortran_pywedge(poscar,sposcar,symops,frange):
+    """
+    Wrapper around nofortran_wedge() that returns a python dictionary with all
+    relevant information about the irreducible displacements.
+    """
+    crotations=np.empty_like(symops.rotations)
+
+    ngrid1=sposcar["na"]
+    ngrid2=sposcar["nb"]
+    ngrid3=sposcar["nc"]
+    nsymm=symops.translations.shape[0]
+    natoms=len(poscar["types"])
+    ntot=len(sposcar["types"])
+
+    for i in xrange(nsymm):
+        crotations[i,:,:]=np.dot(
+            sp.linalg.solve(poscar["lattvec"].T,symops.rotations[i,:,:].T),
+            poscar["lattvec"].T).T
+    coord=np.dot(poscar["lattvec"],poscar["positions"])
+    coordall=np.dot(sposcar["lattvec"],sposcar["positions"])
+    latvec=poscar["lattvec"]
+    invlatvec=sp.linalg.inv(latvec)
+    trans=symops.translations.T
+    orth=np.transpose(crotations,(1,2,0))
+    nequi,llist,allequilist,transformationarray,independentbasis=nofortran_wedge(
+        latvec,invlatvec,coord,coordall,orth,trans,natoms,ngrid1,ngrid2,ngrid3,nsymm,frange)
+    nlist=len(llist)
+    nruter=dict()
+    nruter["Nlist"]=nlist
+    nruter["Nequi"]=np.array(nequi)
+    nruter["List"]=np.array(llist)
+    nruter["NIndependentBasis"]=np.array([len(i) for i in independentbasis])
+    nruter["ALLEquiList"]=np.empty((nlist,nsymm*6,3),dtype=np.int32)
+    nruter["IndependentBasis"]=np.empty((nlist,27),dtype=np.int32)
+    for i in xrange(nlist):
+        for j in xrange(nequi[i]):
+            nruter["ALLEquiList"][i,j,:]=allequilist[i][j]
+        nruter["IndependentBasis"][i,:len(independentbasis[i])]=independentbasis[i]
+    nruter["TransformationArray"]=transformationarray
+    return nruter
+
+
+def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
+                    ngrid1,ngrid2,ngrid3,nsymm,forcerange):
+    """
+    Determine a minimal set of third-order derivatives of the energy
+    needed to obtain all anharmonic IFCs withing the cutoff radius
+    ForceRange. The description of the constants is returned in cList;
+    the rest of the output arguments are necessary for the
+    reconstruction since they describe the equivalences and
+    transformation rules between atomic triplets.
+    """
+    summ=0
+    nlist=0
+    llist=[]
+    nequi=[]
+    allequilist=[]
+    transformation=[]
+    transformationaux=[]
+    independentbasis=[]
+    alllist=[]
+    nalllist=0
+
+    shift2all=np.empty((3,27),dtype=np.int32)
+    shift3all=np.empty((3,27),dtype=np.int32)
+    BB=np.empty((27,27),dtype=np.float64)
+    equilist=np.empty((3,nsymm*6),dtype=np.int32)
+
+    id_equi=nofortran_symmetry(nsymm,natoms,latvec,invlatvec,coord,
+                               ngrid1,ngrid2,ngrid3,orth,trans)
+    ind_cell,ind_species=nofortran_id2ind(ngrid1,ngrid2,ngrid3,natoms)
+    for ii in xrange(natoms):
+        for jj in xrange(ngrid1*ngrid2*ngrid3*natoms):
+            dist_min=np.inf
+            n2equi=0
+            for ix in xrange(-1,2):
+                for iy in xrange(-1,2):
+                    for iz in xrange(-1,2):
+                        dist=sp.linalg.norm(
+                            ix*ngrid1*latvec[:,0]+
+                            iy*ngrid2*latvec[:,1]+
+                            iz*ngrid3*latvec[:,2]+
+                            coordall[:,jj]-coordall[:,ii])
+                        if dist<dist_min:
+                            dist_min=dist
+            for ix in xrange(-1,2):
+                for iy in xrange(-1,2):
+                    for iz in xrange(-1,2):
+                        dist=sp.linalg.norm(
+                            ix*ngrid1*latvec[:,0]+
+                            iy*ngrid2*latvec[:,1]+
+                            iz*ngrid3*latvec[:,2]+
+                            coordall[:,jj]-coordall[:,ii])
+                        if abs(dist-dist_min)<1e-2:
+                            shift2all[:,n2equi]=[ix,iy,iz]
+                            n2equi+=1
+            dist=dist_min
+            if dist<forcerange:
+                for kk in xrange(ngrid1*ngrid2*ngrid3*natoms):
+                    dist_min=np.inf
+                    n3equi=0
+                    for ix in xrange(-1,2):
+                        for iy in xrange(-1,2):
+                            for iz in xrange(-1,2):
+                                dist=sp.linalg.norm(
+                                    ix*ngrid1*latvec[:,0]+
+                                    iy*ngrid2*latvec[:,1]+
+                                    iz*ngrid3*latvec[:,2]+
+                                    coordall[:,kk]-coordall[:,ii])
+                                if dist<dist_min:
+                                    dist_min=dist
+                    for ix in xrange(-1,2):
+                        for iy in xrange(-1,2):
+                            for iz in xrange(-1,2):
+                                dist=sp.linalg.norm(
+                                    ix*ngrid1*latvec[:,0]+
+                                    iy*ngrid2*latvec[:,1]+
+                                    iz*ngrid3*latvec[:,2]+
+                                    coordall[:,kk]-coordall[:,ii])
+                                if abs(dist-dist_min)<1e-2:
+                                    shift3all[:,n3equi]=[ix,iy,iz]
+                                    n3equi+=1
+                    dist=dist_min
+                    dist_min=np.inf
+                    for iaux in xrange(n2equi):
+                        car2=(shift2all[0,iaux]*ngrid1*latvec[:,0]+
+                              shift2all[1,iaux]*ngrid2*latvec[:,1]+
+                              shift2all[2,iaux]*ngrid3*latvec[:,2]+coordall[:,jj])
+                        for jaux in xrange(n3equi):
+                            car3=(shift3all[0,jaux]*ngrid1*latvec[:,0]+
+                                  shift3all[1,jaux]*ngrid2*latvec[:,1]+
+                                  shift3all[2,jaux]*ngrid3*latvec[:,2]+coordall[:,kk])
+                        dist1=scipy.linalg.norm(car3-car2)
+                        if dist1<dist_min:
+                            dist_min=dist1
+                            shift2=shift2all[:,iaux]
+                            shift3=shift3all[:,jaux]
+                    dist1=dist_min
+                    if dist<forcerange and dist1<forcerange:
+                        summ+=1
+                        iaux=1
+                        triplet=[ii,jj,kk]
+                        if not ii==jj==kk==1:
+                            for mm in xrange(nalllist):
+                                if triplet==alllist[mm]:
+                                    iaux=0
+                        if iaux==1:
+                            nlist+=1
+                            llist.append(triplet)
+                            nequi.append(0)
+                            allequilist.append([])
+                            coeffi=np.zeros((6*nsymm*27,27),dtype=np.float64)
+                            nnonzero=0
+                            transformation.append([])
+                            for ipermutation in xrange(6):
+                                if ipermutation==0:
+                                    triplet_permutation=copy.copy(triplet)
+                                elif ipermutation==1:
+                                    triplet_permutation=[triplet[1],
+                                                         triplet[0],
+                                                         triplet[2]]
+                                elif ipermutation==2:
+                                    triplet_permutation=[triplet[2],
+                                                         triplet[1],
+                                                         triplet[0]]
+                                elif ipermutation==3:
+                                    triplet_permutation=[triplet[0],
+                                                         triplet[2],
+                                                         triplet[1]]
+                                elif ipermutation==4:
+                                    triplet_permutation=[triplet[1],
+                                                         triplet[2],
+                                                         triplet[0]]
+                                else:
+                                    triplet_permutation=[triplet[2],
+                                                         triplet[0],
+                                                         triplet[1]]
+                                for isym in xrange(nsymm):
+                                    triplet_sym=[id_equi[isym,triplet_permutation[0]],
+                                                 id_equi[isym,triplet_permutation[1]],
+                                                 id_equi[isym,triplet_permutation[2]]]
+                                    vec1=ind_cell[:,id_equi[isym,triplet_permutation[0]]]
+                                    ispecies1=ind_species[id_equi[isym,triplet_permutation[0]]]
+                                    vec2=ind_cell[:,id_equi[isym,triplet_permutation[1]]]
+                                    ispecies2=ind_species[id_equi[isym,triplet_permutation[1]]]
+                                    vec3=ind_cell[:,id_equi[isym,triplet_permutation[2]]]
+                                    ispecies3=ind_species[id_equi[isym,triplet_permutation[2]]]
+                                    if not np.all(vec1==0):
+                                        triplet_sym[0]=nofortran_ind2id(np.zeros(3),
+                                                                        ispecies1,ngrid1,ngrid2,natoms)
+                                        triplet_sym[1]=nofortran_ind2id((vec2-vec1)%(ngrid1,ngrid2,ngrid3),
+                                                                        ispecies2,ngrid1,ngrid2,natoms)
+                                        triplet_sym[2]=nofortran_ind2id((vec3-vec1)%(ngrid1,ngrid2,ngrid3),
+                                                                        ispecies2,ngrid1,ngrid2,natoms)
+                                    for ibasisprime in xrange(3):
+                                        for jbasisprime in xrange(3):
+                                            for kbasisprime in xrange(3):
+                                                indexijkprime=ibasisprime*9+jbasisprime*3+kbasisprime
+                                                indexrow=ipermutation*nsymm*27+isym*27+indexijkprime
+                                                for ibasis in xrange(3):
+                                                    for jbasis in xrange(3):
+                                                        for kbasis in xrange(3):
+                                                            indexijk=ibasis*9+jbasis*3+kbasis
+                                                            if ipermutation==0:
+                                                                ibasispermut=ibasis
+                                                                jbasispermut=jbasis
+                                                                kbasispermut=kbasis
+                                                            elif ipermutation==1:
+                                                                ibasispermut=jbasis
+                                                                jbasispermut=ibasis
+                                                                kbasispermut=kbasis
+                                                            elif ipermutation==2:
+                                                                ibasispermut=kbasis
+                                                                jbasispermut=jbasis
+                                                                kbasispermut=ibasis
+                                                            elif ipermutation==3:
+                                                                ibasispermut=jbasis
+                                                                jbasispermut=kbasis
+                                                                kbasispermut=jbasis
+                                                            elif ipermutation==4:
+                                                                ibasispermut=jbasis
+                                                                jbasispermut=kbasis
+                                                                kbasispermut=ibasis
+                                                            else:
+                                                                ibasispermut=kbasis
+                                                                jbasispermut=ibasis
+                                                                kbasispermut=jbasis
+                                                            BB[indexijkprime,indexijk]=(
+                                                                orth[ibasisprime,ibasispermut,isym]*
+                                                                orth[jbasisprime,jbasispermut,isym]*
+                                                                orth[kbasisprime,kbasispermut,isym])
+                                    iaux=1
+                                    if not (ipermutation==0 and isym==0):
+                                        for ll in xrange(nequi[nlist-1]):
+                                            if triplet_sym==list(equilist[:,ll]):
+                                                iaux=0
+                                    if iaux==1:
+                                        if (ipermutation==0 and isym==0) or triplet_sym!=triplet:
+                                            nequi[nlist-1]+=1
+                                            equilist[:,nequi[nlist-1]-1]=triplet_sym
+                                            allequilist[-1].append(triplet_sym)
+                                            nalllist+=1
+                                            alllist.append(triplet_sym)
+                                            transformation[-1].append(np.array(BB))
+                                    if triplet_sym==triplet:
+                                        for indexijkprime in xrange(27):
+                                            nonzero=False
+                                            for indexijk in xrange(27):
+                                                if indexijkprime==indexijk:
+                                                    BB[indexijkprime,indexijk]-=1.
+                                                if abs(BB[indexijkprime,indexijk])>1e-12:
+                                                    nonzero=True
+                                                else:
+                                                    BB[indexijkprime,indexijk]=0.
+                                            if nonzero:
+                                                coeffi[nnonzero,:]=BB[indexijkprime,:]
+                                                nnonzero+=1
+                            coeffi_reduced=np.zeros((max(nnonzero,27),27),dtype=np.float64)
+                            coeffi_reduced[:nnonzero,:]=coeffi[:nnonzero,:]
+                            b,independent=nofortran_gaussian(coeffi_reduced)
+                            transformationaux.append(b)
+                            independentbasis.append(independent)
+    transformationarray=np.zeros((27,27,nsymm*6,nlist),dtype=np.float64)
+    for ii in xrange(nlist):
+        for jj in xrange(nequi[ii]):
+            transformationarray[:,:len(independentbasis[ii]),jj,ii]=np.dot(
+                transformation[ii][jj][:,:],
+                transformationaux[ii][:,:len(independentbasis[ii])])
+            for kk in xrange(27):
+                for ll in xrange(27):
+                    if abs(transformationarray[kk,ll,jj,ii])<1e-12:
+                        transformationarray[kk,ll,jj,ii]=0.
+    return (nequi,llist,allequilist,transformationarray,independentbasis)
+
+
+
+def nofortran_symmetry(nsymm,natoms,latvec,invlatvec,coord,
+                       ngrid1,ngrid2,ngrid3,orth,trans):
+    """
+    Each symmetry operation defines a mapping between atom indices in
+    the supercell. This subroutine fills a matrix with those
+    permutations.
+    """
+    ind_cell,ind_species=nofortran_id2ind(ngrid1,ngrid2,ngrid3,natoms)
+    nruter=np.empty((nsymm,natoms*ngrid1*ngrid2*ngrid3),dtype=np.int32)
+    for i in xrange(natoms*ngrid1*ngrid2*ngrid3):
+        vec=ind_cell[:,i]
+        ispecies=ind_species[i]
+        car=nofortran_lattice2car(latvec,coord,vec,ispecies)
+        car_sym=nofortran_symm(nsymm,latvec,car,orth,trans)
+        for isym in xrange(nsymm):
+            vec,ispecies_sym=nofortran_car2lattice(
+                natoms,latvec,invlatvec,coord,car_sym[:,isym])
+            vec[0]=vec[0]%ngrid1
+            vec[1]=vec[1]%ngrid2
+            vec[2]=vec[2]%ngrid3
+            nruter[isym,i]=nofortran_ind2id(vec,ispecies_sym,ngrid1,ngrid2,natoms)
+    return nruter
+
+
+def nofortran_symm(nsymm,latvec,r_in,orth,trans):
+    """
+    Apply a symmetry operation to a vector and return the result.
+    """
+    r_out=np.empty((3,nsymm))
+    for ii in xrange(nsymm):
+        disp=trans[0,ii]*latvec[:,0]+trans[1,ii]*latvec[:,1]+trans[2,ii]*latvec[:,2]
+        r_out[:,ii]=np.dot(orth[:,:,ii],r_in)+disp
+    return r_out
+
+
+def nofortran_car2lattice(natoms,latvec,invlatvec,coord,car):
+    """
+    Return the unit cell and atom indices of an element of the
+    supercell based on its Cartesian coordinates.
+    """
+    tmp2=np.empty((3,natoms))
+    for i in xrange(natoms):
+        tmp2[:,i]=car-coord[:,i]
+    tmp2=np.dot(invlatvec,tmp2)
+    for i in xrange(natoms):
+        icell=np.round(tmp2[:,i]).astype(np.int32)
+        displ=icell[0]*latvec[:,0]+icell[1]*latvec[:,1]+icell[2]*latvec[:,2]-(car-coord[:,i])
+        dist=np.dot(displ,displ)
+        if dist<1e-4:
+            iatom=i
+            break
+    return (icell,iatom)
+
+
+def nofortran_lattice2car(latvec,coord,icell,iatom):
+    """
+    Inverse of the previous subroutine: converts from atom+cell
+    indices to Cartesian coordinates.
+    """
+    return icell[0]*latvec[:,0]+icell[1]*latvec[:,1]+icell[2]*latvec[:,2]+coord[:,iatom]
+
+
+def nofortran_id2ind(ngrid1,ngrid2,ngrid3,nspecies):
+    """
+    Generate a mapping between unit cell+atom indices to atom indices
+    in the supercell.
+    """
+    icell=np.empty((3,ngrid1*ngrid2*ngrid3*nspecies),dtype=np.int32)
+    ispecies=np.empty(ngrid1*ngrid2*ngrid3*nspecies,dtype=np.int32)
+    for ii in xrange(ngrid1*ngrid2*ngrid3*nspecies):
+        ispecies[ii]=ii%nspecies
+        tmp=ii//nspecies
+        icell[2,ii]=tmp//(ngrid1*ngrid2)
+        icell[1,ii]=(tmp%(ngrid1*ngrid2))//ngrid1
+        icell[0,ii]=tmp%ngrid1
+    return (icell,ispecies)
+
+
+def nofortran_ind2id(icell,ispecies,ngrid1,ngrid2,nspecies):
+    """
+    Merge a set of cell+atom indices into a single index into the supercell.
+    """
+    return (icell[0]+(icell[1]+icell[2]*ngrid2)*ngrid1)*nspecies+ispecies
+
+
+def nofortran_gaussian(a):
+    """
+    Specialized version of Gaussian elimination.
+    """
+    EPS=1e-10
+    row,column=a.shape
+
+    irow=0
+    dependent=[]
+    independent=[]
+    for k in xrange(min(row,column)):
+        a[np.fabs(a[:,k])<EPS,k]=0.
+        for i in xrange(irow+1,row):
+            if np.fabs(a[i,k])-np.fabs(a[irow,k])>EPS:
+                a[[i,irow],k:]=a[[irow,i],k:]
+        if np.fabs(a[irow,k])>EPS:
+            dependent.append(k)
+            a[irow,k:]/=a[irow,k]
+            for i in xrange(row):
+                if i==irow:
+                    continue
+                a[i,k+1:]-=a[i,k]*a[irow,k+1:]/a[irow,k]
+                a[i,k]=0.
+            if irow<row-1:
+                irow+=1
+        else:
+            independent.append(k)
+    b=np.zeros((column,column))
+    for j,jj in enumerate(independent):
+        for i,ii in enumerate(dependent):
+            b[ii,j]=-a[i,jj]
+        b[jj,j]=1.
+    return (b,independent)
