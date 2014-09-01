@@ -456,7 +456,7 @@ def nofortran_pywedge(poscar,sposcar,symops,frange):
     nruter=dict()
     nruter["Nlist"]=nlist
     nruter["Nequi"]=np.array(nequi)
-    nruter["List"]=np.array(llist)
+    nruter["List"]=np.array(llist).T
     nruter["NIndependentBasis"]=np.array([len(i) for i in independentbasis])
     nruter["ALLEquiList"]=np.empty((nlist,nsymm*6,3),dtype=np.int32)
     nruter["IndependentBasis"]=np.empty((nlist,27),dtype=np.int32)
@@ -464,6 +464,7 @@ def nofortran_pywedge(poscar,sposcar,symops,frange):
         for j in xrange(nequi[i]):
             nruter["ALLEquiList"][i,j,:]=allequilist[i][j]
         nruter["IndependentBasis"][i,:len(independentbasis[i])]=independentbasis[i]
+    nruter["IndependentBasis"]=nruter["IndependentBasis"].T
     nruter["TransformationArray"]=transformationarray
     return nruter
 
