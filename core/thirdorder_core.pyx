@@ -45,6 +45,17 @@ cimport cthirdorder_core
 # Maximum matrix size (rows*cols) for the dense method.
 DEF MAXDENSE=33554432
 
+# Permutations of 3 elements listed in the same order as in the old
+# Fortran code.
+cdef int[:,:] permutations=np.array([
+        [0,1,2],
+        [1,0,2],
+        [2,1,0],
+        [0,2,1],
+        [1,2,0],
+        [2,0,1]],dtype=np.int32)
+
+
 # Thin, specialized wrapper around spglib.
 cdef class SymmetryOperations:
   """
@@ -476,7 +487,6 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
     transformationaux=[]
     independentbasis=[]
     alllist=[]
-    nalllist=0
 
     shift2all=np.empty((3,27),dtype=np.int32)
     shift3all=np.empty((3,27),dtype=np.int32)
@@ -555,14 +565,8 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
                     dist1=dist_min
                     if dist<forcerange and dist1<forcerange:
                         summ+=1
-                        iaux=1
                         triplet=[ii,jj,kk]
-                        if not ii==jj==kk==1:
-                            for mm in xrange(nalllist):
-                                if triplet==alllist[mm]:
-                                    iaux=0
-                        if iaux==1:
-                            nlist+=1
+                        if not triplet in alllist:
                             llist.append(triplet)
                             nequi.append(0)
                             allequilist.append([])
@@ -570,28 +574,9 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
                             nnonzero=0
                             transformation.append([])
                             for ipermutation in xrange(6):
-                                if ipermutation==0:
-                                    triplet_permutation=copy.copy(triplet)
-                                elif ipermutation==1:
-                                    triplet_permutation=[triplet[1],
-                                                         triplet[0],
-                                                         triplet[2]]
-                                elif ipermutation==2:
-                                    triplet_permutation=[triplet[2],
-                                                         triplet[1],
-                                                         triplet[0]]
-                                elif ipermutation==3:
-                                    triplet_permutation=[triplet[0],
-                                                         triplet[2],
-                                                         triplet[1]]
-                                elif ipermutation==4:
-                                    triplet_permutation=[triplet[1],
-                                                         triplet[2],
-                                                         triplet[0]]
-                                else:
-                                    triplet_permutation=[triplet[2],
-                                                         triplet[0],
-                                                         triplet[1]]
+                                triplet_permutation=[
+                                    triplet[iel] for iel in permutations[ipermutation,:]
+                                    ]
                                 for isym in xrange(nsymm):
                                     triplet_sym=[id_equi[isym,triplet_permutation[0]],
                                                  id_equi[isym,triplet_permutation[1]],
@@ -608,7 +593,7 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
                                         triplet_sym[1]=nofortran_ind2id((vec2-vec1)%(ngrid1,ngrid2,ngrid3),
                                                                         ispecies2,ngrid1,ngrid2,natoms)
                                         triplet_sym[2]=nofortran_ind2id((vec3-vec1)%(ngrid1,ngrid2,ngrid3),
-                                                                        ispecies2,ngrid1,ngrid2,natoms)
+                                                                        ispecies3,ngrid1,ngrid2,natoms)
                                     for ibasisprime in xrange(3):
                                         for jbasisprime in xrange(3):
                                             for kbasisprime in xrange(3):
@@ -618,45 +603,24 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
                                                     for jbasis in xrange(3):
                                                         for kbasis in xrange(3):
                                                             indexijk=ibasis*9+jbasis*3+kbasis
-                                                            if ipermutation==0:
-                                                                ibasispermut=ibasis
-                                                                jbasispermut=jbasis
-                                                                kbasispermut=kbasis
-                                                            elif ipermutation==1:
-                                                                ibasispermut=jbasis
-                                                                jbasispermut=ibasis
-                                                                kbasispermut=kbasis
-                                                            elif ipermutation==2:
-                                                                ibasispermut=kbasis
-                                                                jbasispermut=jbasis
-                                                                kbasispermut=ibasis
-                                                            elif ipermutation==3:
-                                                                ibasispermut=jbasis
-                                                                jbasispermut=kbasis
-                                                                kbasispermut=jbasis
-                                                            elif ipermutation==4:
-                                                                ibasispermut=jbasis
-                                                                jbasispermut=kbasis
-                                                                kbasispermut=ibasis
-                                                            else:
-                                                                ibasispermut=kbasis
-                                                                jbasispermut=ibasis
-                                                                kbasispermut=jbasis
+                                                            ibasispermut,jbasispermut,kbasispermut=[
+                                                                [ibasis,jbasis,kbasis][iel] for
+                                                                iel in permutations[ipermutation,:]
+                                                                ]
                                                             BB[indexijkprime,indexijk]=(
                                                                 orth[ibasisprime,ibasispermut,isym]*
                                                                 orth[jbasisprime,jbasispermut,isym]*
                                                                 orth[kbasisprime,kbasispermut,isym])
                                     iaux=1
                                     if not (ipermutation==0 and isym==0):
-                                        for ll in xrange(nequi[nlist-1]):
+                                        for ll in xrange(nequi[-1]):
                                             if triplet_sym==list(equilist[:,ll]):
                                                 iaux=0
                                     if iaux==1:
                                         if (ipermutation==0 and isym==0) or triplet_sym!=triplet:
-                                            nequi[nlist-1]+=1
-                                            equilist[:,nequi[nlist-1]-1]=triplet_sym
+                                            nequi[-1]+=1
+                                            equilist[:,nequi[-1]-1]=triplet_sym
                                             allequilist[-1].append(triplet_sym)
-                                            nalllist+=1
                                             alllist.append(triplet_sym)
                                             transformation[-1].append(np.array(BB))
                                     if triplet_sym==triplet:
@@ -677,8 +641,8 @@ def nofortran_wedge(latvec,invlatvec,coord,coordall,orth,trans,natoms,
                             b,independent=nofortran_gaussian(coeffi_reduced)
                             transformationaux.append(b)
                             independentbasis.append(independent)
-    transformationarray=np.zeros((27,27,nsymm*6,nlist),dtype=np.float64)
-    for ii in xrange(nlist):
+    transformationarray=np.zeros((27,27,nsymm*6,len(llist)),dtype=np.float64)
+    for ii in xrange(len(llist)):
         for jj in xrange(nequi[ii]):
             transformationarray[:,:len(independentbasis[ii]),jj,ii]=np.dot(
                 transformation[ii][jj][:,:],
@@ -776,36 +740,55 @@ def nofortran_ind2id(icell,ispecies,ngrid1,ngrid2,nspecies):
     return (icell[0]+(icell[1]+icell[2]*ngrid2)*ngrid1)*nspecies+ispecies
 
 
-def nofortran_gaussian(a):
+DEF EPS=1e-10
+cdef nofortran_gaussian(double[:,:] a):
     """
     Specialized version of Gaussian elimination.
     """
-    EPS=1e-10
-    row,column=a.shape
+    cdef int i,j,k,irow
+    cdef int row,column,ndependent,nindependent
+    cdef double tmp
+    cdef int[:] dependent,independent
+
+    row=a.shape[0]
+    col=a.shape[1]
+
+    dependent=np.empty(col,dtype=np.int32)
+    independent=np.empty(col,dtype=np.int32)
+    b=np.zeros((col,col))
 
     irow=0
-    dependent=[]
-    independent=[]
-    for k in xrange(min(row,column)):
-        a[np.fabs(a[:,k])<EPS,k]=0.
+    ndependent=0
+    nindependent=0
+    for k in xrange(min(row,col)):
+        for i in xrange(row):
+            if fabs(a[i,k])<EPS:
+                a[i,k]=0.
         for i in xrange(irow+1,row):
-            if np.fabs(a[i,k])-np.fabs(a[irow,k])>EPS:
-                a[[i,irow],k:]=a[[irow,i],k:]
-        if np.fabs(a[irow,k])>EPS:
-            dependent.append(k)
-            a[irow,k:]/=a[irow,k]
+            if fabs(a[i,k])-fabs(a[irow,k])>EPS:
+                for j in xrange(k,col):
+                    tmp=a[irow,j]
+                    a[irow,j]=a[i,j]
+                    a[i,j]=tmp
+        if fabs(a[irow,k])>EPS:
+            dependent[ndependent]=k
+            ndependent+=1
+            for j in xrange(col-1,k,-1):
+                a[irow,j]/=a[irow,k]
+            a[irow,k]=1.
             for i in xrange(row):
                 if i==irow:
                     continue
-                a[i,k+1:]-=a[i,k]*a[irow,k+1:]/a[irow,k]
+                for j in xrange(col-1,k,-1):
+                    a[i,j]-=a[i,k]*a[irow,j]/a[irow,k]
                 a[i,k]=0.
             if irow<row-1:
                 irow+=1
         else:
-            independent.append(k)
-    b=np.zeros((column,column))
-    for j,jj in enumerate(independent):
-        for i,ii in enumerate(dependent):
-            b[ii,j]=-a[i,jj]
-        b[jj,j]=1.
-    return (b,independent)
+            independent[nindependent]=k
+            nindependent+=1
+    for j in xrange(nindependent):
+        for i in xrange(ndependent):
+            b[dependent[i],j]=-a[i,independent[j]]
+        b[independent[j],j]=1.
+    return (b,list(independent[:nindependent]))

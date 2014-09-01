@@ -204,7 +204,7 @@ if __name__=="__main__":
     print "Calling experimental function nofortran_wedge()"
     nofortran_wedgeres=thirdorder_core.nofortran_pywedge(
         poscar,sposcar,symops,frange)
-    sys.exit(1)
+    wedgeres=nofortran_wedgeres
     print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
     list4=build_list4(wedgeres)
     nirred=len(list4)
