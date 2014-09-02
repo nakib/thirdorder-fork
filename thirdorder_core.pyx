@@ -185,7 +185,7 @@ cdef class SymmetryOperations:
           free(self.c_positions)
 
 
-@cython.boundscheck(False)
+#@cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     """
     Recover the full anharmonic IFC set from the irreducible set of
@@ -229,6 +229,9 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     vequilist=wedgeres["ALLEquiList"]
     for ii in xrange(nlist):
         for jj in xrange(wedgeres["Nequi"][ii]):
+            for ll in xrange(3):
+                print vequilist[ll,jj,ii],
+            print "-"*20,natoms,ntot,"-"*20
             vind1[vequilist[0,jj,ii],
                   vequilist[1,jj,ii],
                   vequilist[2,jj,ii]]=ii
@@ -242,7 +245,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     ncols=natoms*ntot*27
 
     if nrows*ncols<=MAXDENSE:
-        print "- Using a dense QR factorization algorithm"
+        print "- Building the coefficient matrix as a dense matrix"
         aa=np.zeros((nrows,ncols))
         vaa=aa
         colindex=0
@@ -262,16 +265,8 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                                                                      vind2[ii,jj,kk],ix]
                             tribasisindex+=1
                             colindex+=1
-        Q,R,P=sp.linalg.qr(aa,mode="economic",pivoting=True)
-        nnonzero=(np.abs(np.diag(R))>=1e-12).sum()
-        bb=np.array(Q[:,:nnonzero])
-        D=np.diag(aphilist)
-        ones=np.ones_like(aphilist)
-        bb=np.dot(D,bb)
-        multiplier=-sp.linalg.lstsq(bb,ones)[0]
-        compensation=np.dot(D,np.dot(bb,multiplier))
     else:
-        print "- Using a sparse least-squares method"
+        print "Building the coefficient matrix as a sparse matrix"
         i=[]
         j=[]
         v=[]
@@ -296,12 +291,12 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                             colindex+=1
         print "- \t Density: {0:.2g}%".format(100.*len(i)/float(nrows*ncols))
         aa=sp.sparse.coo_matrix((v,(i,j)),(nrows,ncols)).tocsr()
-        D=sp.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
-                               format="csr")
-        bbs=D.dot(aa)
-        ones=np.ones_like(aphilist)
-        multiplier=-sp.sparse.linalg.lsqr(bbs,ones)[0]
-        compensation=D.dot(bbs.dot(multiplier))
+    D=sp.sparse.spdiags(aphilist,[0,],aphilist.size,aphilist.size,
+                           format="csr")
+    bbs=D.dot(aa)
+    ones=np.ones_like(aphilist)
+    multiplier=-sp.sparse.linalg.lsqr(bbs,ones)[0]
+    compensation=D.dot(bbs.dot(multiplier))
 
     aphilist+=compensation
 
@@ -366,6 +361,7 @@ def nofortran_pywedge(poscar,sposcar,symops,frange):
         nruter["IndependentBasis"][i,:len(independentbasis[i])]=independentbasis[i]
     nruter["IndependentBasis"]=nruter["IndependentBasis"].T
     nruter["TransformationArray"]=transformationarray
+    nruter["ALLEquiList"]=np.transpose(nruter["ALLEquiList"],(2,1,0))
     return nruter
 
 
