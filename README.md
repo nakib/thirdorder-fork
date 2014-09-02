@@ -8,7 +8,7 @@ The purpose of the thirdorder scripts is to help users of [ShengBTE](https://bit
 
 # Compilation #
 
-thirdorder is a set of Python scripts. It was developed using Python 2.7.3, but should work with slightly older versions. In addition to the modules in Python's standard library, the numpy and scipy numerical libraries are required. Moreover, this script relies on a module, thirdorder\_core, which is written in a mixture of Cython and Fortran. Thus, in spite of Python being an interpreted language, a compilation step is needed.
+thirdorder is a set of Python scripts. It was developed using Python 2.7.3, but should work with slightly older versions. In addition to the modules in Python's standard library, the numpy and scipy numerical libraries are required. Moreover, this script relies on a module, thirdorder\_core, which is written in a Cython. Thus, in spite of Python being an interpreted language, a compilation step is needed.
 
 An arch.make file is required for compilation. An example is provided with the distribution under the name arch.make.example, with the following contents:
 

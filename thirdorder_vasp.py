@@ -199,12 +199,8 @@ if __name__=="__main__":
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
-    print "Calling wedge()"
-    wedgeres=thirdorder_core.pywedge(poscar,sposcar,symops,frange)
     print "Calling experimental function nofortran_wedge()"
-    nofortran_wedgeres=thirdorder_core.nofortran_pywedge(
-        poscar,sposcar,symops,frange)
-    wedgeres=nofortran_wedgeres
+    wedgeres=thirdorder_core.nofortran_pywedge(poscar,sposcar,symops,frange)
     print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
     list4=build_list4(wedgeres)
     nirred=len(list4)

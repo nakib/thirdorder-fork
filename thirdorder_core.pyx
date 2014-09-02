@@ -18,11 +18,9 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # This file contains Cython wrappers allowing the relevant functions
-# in spglib and also around the Fortran subroutines in
-# thirdorder_core.f90 that need to be used from Python.
-# Finally, the the reconstruction of the anharmonic interatomic
-# constant set from the minimal set of constants is also implemented
-# in this file for efficiency.
+# in spglib need to be used from Python. The reconstruction of the
+# anharmonic interatomic constant set from the minimal set of
+# constants is also implemented in this file for efficiency.
 
 from libc.stdlib cimport malloc,free
 from libc.math cimport round,fabs,sqrt
@@ -185,104 +183,6 @@ cdef class SymmetryOperations:
           free(self.c_types)
       if self.c_positions is not NULL:
           free(self.c_positions)
-
-
-def pywedge(poscar,sposcar,symops,frange):
-    """
-    Wrapper around wedge() that returns a python dictionary with all
-    relevant information about the irreducible displacements.
-    """
-    cdef double ForceRange
-    cdef int Ngrid1,Ngrid2,Ngrid3,Nsymm,Natoms,Ntot,Nlist,Allocsize
-    cdef double LatVec[3][3]
-    cdef double InvLatVec[3][3]
-    cdef double (*Coord)[3]
-    cdef double (*CoordAll)[3]
-    cdef double (*Orth)[3][3]
-    cdef double (*Trans)[3]
-    cdef void *vNequi
-    cdef void *vList
-    cdef void *vALLEquiList
-    cdef void *vTransformationArray
-    cdef void *vNIndependentBasis
-    cdef void *vIndependentBasis
-    cdef int i,j,k
-
-    crotations=np.empty_like(symops.rotations)
-
-    ForceRange=frange
-    Ngrid1=sposcar["na"]
-    Ngrid2=sposcar["nb"]
-    Ngrid3=sposcar["nc"]
-    Nsymm=symops.translations.shape[0]
-    Natoms=len(poscar["types"])
-    Ntot=len(sposcar["types"])
-    Coord=<double(*)[3]>malloc(Natoms*sizeof(double[3]))
-    CoordAll=<double(*)[3]>malloc(Ntot*sizeof(double[3]))
-    Orth=<double(*)[3][3]>malloc(Nsymm*sizeof(double[3][3]))
-    Trans=<double(*)[3]>malloc(Nsymm*sizeof(double[3][3]))
-
-    for i in xrange(Nsymm):
-        crotations[i,:,:]=np.dot(
-            sp.linalg.solve(poscar["lattvec"].T,symops.rotations[i,:,:].T),
-            poscar["lattvec"].T).T
-    cpos=np.dot(poscar["lattvec"],poscar["positions"])
-    cposall=np.dot(sposcar["lattvec"],sposcar["positions"])
-    for i in xrange(3):
-        for j in xrange(3):
-            LatVec[j][i]=poscar["lattvec"][i,j]
-    ilv=sp.linalg.inv(poscar["lattvec"])
-    for i in xrange(3):
-        for j in xrange(3):
-            InvLatVec[j][i]=ilv[i,j]
-    for i in xrange(Natoms):
-        for j in xrange(3):
-            Coord[i][j]=cpos[j,i]
-    for i in xrange(Ntot):
-        for j in xrange(3):
-            CoordAll[i][j]=cposall[j,i]
-    for i in xrange(Nsymm):
-        for j in xrange(3):
-            Trans[i][j]=symops.translations[i,j]
-            for k in xrange(3):
-                Orth[i][k][j]=crotations[i,j,k]
-    cthirdorder_core.wedge(LatVec,InvLatVec,Coord,CoordAll,Orth,Trans,Natoms,
-                           &Nlist,&vNequi,&vList,
-                           &vALLEquiList,&vTransformationArray,
-                           &vNIndependentBasis,&vIndependentBasis,
-                           Ngrid1,Ngrid2,Ngrid3,Nsymm,ForceRange,
-                           &Allocsize)
-    free(Trans)
-    free(Orth)
-    free(CoordAll)
-    free(Coord)
-    # The dictionary contains numpy arrays instead of the original
-    # low-level ones. The following fragment handles these
-    # assignations. One-based Fortran indices are converted to the
-    # C/Python zero-based convention.
-    nruter=dict()
-    nruter["Nlist"]=int(Nlist)
-    nruter["Nequi"]=np.empty(Nlist,dtype=np.int32)
-    nruter["Nequi"][:]=<int[:Nlist]>vNequi
-    nruter["List"]=np.empty((Nlist,3),dtype=np.int32)
-    nruter["List"][:,:]=<int[:Nlist,:3]>vList
-    nruter["ALLEquiList"]=np.empty((Nlist,Nsymm*6,3),dtype=np.int32)
-    nruter["ALLEquiList"][:,:,:]=<int[:Nlist,:Nsymm*6,:3]>vALLEquiList
-    nruter["TransformationArray"]=np.empty((Nlist,Nsymm*6,27,27))
-    nruter["TransformationArray"][:,:,:,:]=(<double[:Nlist,:Nsymm*6,:27,:27]>
-                                            vTransformationArray)
-    nruter["NIndependentBasis"]=np.empty(Nlist,dtype=np.int32)
-    nruter["NIndependentBasis"][:]=<int[:Nlist]>vNIndependentBasis
-    nruter["IndependentBasis"]=np.empty((Nlist,27),dtype=np.int32)
-    nruter["IndependentBasis"][:,:]=<int[:Nlist,:27]>vIndependentBasis
-    cthirdorder_core.free_wedge(Allocsize,Nsymm,vNequi,vList,vALLEquiList,
-                                vTransformationArray,vNIndependentBasis,
-                                vIndependentBasis)
-    nruter["List"]=nruter["List"].T-1
-    nruter["ALLEquiList"]=nruter["ALLEquiList"].T-1
-    nruter["TransformationArray"]=nruter["TransformationArray"].T
-    nruter["IndependentBasis"]=nruter["IndependentBasis"].T-1
-    return nruter
 
 
 @cython.boundscheck(False)
@@ -742,6 +642,9 @@ def nofortran_ind2id(icell,ispecies,ngrid1,ngrid2,nspecies):
 
 
 DEF EPS=1e-10
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.wraparound(True)
 cdef nofortran_gaussian(double[:,:] a):
     """
     Specialized version of Gaussian elimination.
