@@ -3,7 +3,6 @@
 *.so
 *.o
 *.mod
-*.c
 POSCAR
 3RD.*
 build
