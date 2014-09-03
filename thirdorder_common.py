@@ -34,8 +34,8 @@ try:
     hashes=True
 except ImportError:
     hashes=False
-import numpy
-import scipy
+import numpy as np
+import scipy as sp
 import scipy.linalg
 import scipy.spatial
 import scipy.spatial.distance
@@ -95,13 +95,13 @@ def gen_SPOSCAR(poscar,na,nb,nc):
     nruter["na"]=na
     nruter["nb"]=nb
     nruter["nc"]=nc
-    nruter["lattvec"]=numpy.array(poscar["lattvec"])
+    nruter["lattvec"]=np.array(poscar["lattvec"])
     nruter["lattvec"][:,0]*=na
     nruter["lattvec"][:,1]*=nb
     nruter["lattvec"][:,2]*=nc
     nruter["elements"]=copy.copy(poscar["elements"])
     nruter["numbers"]=na*nb*nc*poscar["numbers"]
-    nruter["positions"]=numpy.empty((3,poscar["positions"].shape[1]*na*nb*nc))
+    nruter["positions"]=np.empty((3,poscar["positions"].shape[1]*na*nb*nc))
     pos=0
     for pos,(k,j,i,iat) in enumerate(itertools.product(xrange(nc),
                                                        xrange(nb),
@@ -122,21 +122,21 @@ def calc_dists(sposcar):
     degeneracies and the associated supercell vectors.
     """
     ntot=sposcar["positions"].shape[1]
-    posi=numpy.dot(sposcar["lattvec"],sposcar["positions"])
-    d2s=numpy.empty((27,ntot,ntot))
+    posi=np.dot(sposcar["lattvec"],sposcar["positions"])
+    d2s=np.empty((27,ntot,ntot))
     for j,(ja,jb,jc) in enumerate(itertools.product(xrange(-1,2),
                                                     xrange(-1,2),
                                                     xrange(-1,2))):
-        posj=numpy.dot(sposcar["lattvec"],(sposcar["positions"].T+[ja,jb,jc]).T)
+        posj=np.dot(sposcar["lattvec"],(sposcar["positions"].T+[ja,jb,jc]).T)
         d2s[j,:,:]=scipy.spatial.distance.cdist(posi.T,posj.T,"sqeuclidean")
     d2min=d2s.min(axis=0)
-    dmin=numpy.sqrt(d2min)
-    degenerate=(numpy.abs(d2s-d2min)<1e-4)
-    nequi=degenerate.sum(axis=0)
+    dmin=np.sqrt(d2min)
+    degenerate=(np.abs(d2s-d2min)<1e-4)
+    nequi=degenerate.sum(axis=0,dtype=np.intc)
     maxequi=nequi.max()
-    shifts=numpy.empty((ntot,ntot,maxequi))
-    sorting=numpy.argsort(numpy.logical_not(degenerate),axis=0)
-    shifts=numpy.transpose(sorting[:maxequi,:,:],(1,2,0))
+    shifts=np.empty((ntot,ntot,maxequi))
+    sorting=np.argsort(np.logical_not(degenerate),axis=0)
+    shifts=np.transpose(sorting[:maxequi,:,:],(1,2,0)).astype(np.intc)
     return (dmin,nequi,shifts)
 
 
@@ -153,7 +153,7 @@ def calc_frange(poscar,sposcar,n,dmin):
         u=[]
         for j in ds:
             for k in u:
-                if numpy.allclose(k,j):
+                if np.allclose(k,j):
                     break
             else:
                 u.append(j)
@@ -175,7 +175,7 @@ def move_two_atoms(poscar,iat,icoord,ih,jat,jcoord,jh):
     jh nm along its jcoord-th Cartesian coordinate.
     """
     nruter=copy.deepcopy(poscar)
-    disp=numpy.zeros(3)
+    disp=np.zeros(3)
     disp[icoord]=ih
     nruter["positions"][:,iat]+=scipy.linalg.solve(nruter["lattvec"],
                                                    disp)
@@ -234,11 +234,11 @@ def write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,filename):
                 continue
             katom=kk%natoms
             shiftsik=[shifts27[i] for i in shifts[ii,kk,:nequi[ii,kk]]]
-            d2min=numpy.inf
+            d2min=np.inf
             for shift2 in shiftsij:
-                carj=numpy.dot(sposcar["lattvec"],shift2+sposcar["positions"][:,jj])
+                carj=np.dot(sposcar["lattvec"],shift2+sposcar["positions"][:,jj])
                 for shift3 in shiftsik:
-                    cark=numpy.dot(sposcar["lattvec"],shift3+sposcar["positions"][:,kk])
+                    cark=np.dot(sposcar["lattvec"],shift3+sposcar["positions"][:,kk])
                     d2=((carj-cark)**2).sum()
                     if d2<d2min:
                         best2=shift2
@@ -247,9 +247,9 @@ def write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,filename):
             if d2min>=frange2:
                 continue
             nblocks+=1
-            Rj=numpy.dot(sposcar["lattvec"],
+            Rj=np.dot(sposcar["lattvec"],
                          best2+sposcar["positions"][:,jj]-sposcar["positions"][:,jatom])
-            Rk=numpy.dot(sposcar["lattvec"],
+            Rk=np.dot(sposcar["lattvec"],
                          best3+sposcar["positions"][:,kk]-sposcar["positions"][:,katom])
             f.write("\n")
             f.write("{:>5}\n".format(nblocks))

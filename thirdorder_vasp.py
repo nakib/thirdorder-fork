@@ -47,7 +47,7 @@ def read_POSCAR(directory):
     """
     with dir_context(directory):
         nruter=dict()
-        nruter["lattvec"]=numpy.empty((3,3))
+        nruter["lattvec"]=np.empty((3,3))
         f=open(os.path.join(directory,"POSCAR"),"r")
         firstline=f.next()
         factor=.1*float(f.next().strip())
@@ -63,14 +63,14 @@ def read_POSCAR(directory):
             old=True
         if old:
             nruter["elements"]=firstline.split()
-            nruter["numbers"]=numpy.array([int(i) for i in line.split()])
+            nruter["numbers"]=np.array([int(i) for i in line.split()])
             typeline="".join(fields)
         else:
             nruter["elements"]=line.split()
-            nruter["numbers"]=numpy.array([int(i) for i in fields])
+            nruter["numbers"]=np.array([int(i) for i in fields])
             typeline=f.next()
         natoms=nruter["numbers"].sum()
-        nruter["positions"]=numpy.empty((3,natoms))
+        nruter["positions"]=np.empty((3,natoms))
         for i in xrange(natoms):
             nruter["positions"][:,i]=[float(j) for j in f.next().split()]
         f.close()
@@ -78,7 +78,7 @@ def read_POSCAR(directory):
     for i in xrange(len(nruter["numbers"])):
         nruter["types"]+=[i]*nruter["numbers"][i]
     if typeline[0]=="C":
-        nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
+        nruter["positions"]=sp.linalg.solve(nruter["lattvec"],
                                                nruter["positions"]*factor)
     return nruter
 
@@ -118,9 +118,9 @@ def normalize_SPOSCAR(sposcar):
     # Order used internally (from most to least significant):
     # k,j,i,iat For VASP, iat must be the most significant index,
     # i.e., atoms of the same element must go together.
-    indices=numpy.array(xrange(nruter["positions"].shape[1])).reshape(
+    indices=np.array(xrange(nruter["positions"].shape[1])).reshape(
         (sposcar["nc"],sposcar["nb"],sposcar["na"],-1))
-    indices=numpy.rollaxis(indices,3,0).flatten().tolist()
+    indices=np.rollaxis(indices,3,0).flatten().tolist()
     nruter["positions"]=nruter["positions"][:,indices]
     nruter["types"].sort()
     return nruter
@@ -139,7 +139,7 @@ def read_forces(filename):
     nruter=[]
     for i in a.getchildren():
         nruter.append([float(j) for j in i.text.split()])
-    nruter=numpy.array(nruter)
+    nruter=np.array(nruter)
     return nruter
 
 
@@ -148,9 +148,9 @@ def build_unpermutation(sposcar):
     Return a list of integers mapping the atoms in the normalized
     version of sposcar to their original indices.
     """
-    indices=numpy.array(xrange(sposcar["positions"].shape[1])).reshape(
+    indices=np.array(xrange(sposcar["positions"].shape[1])).reshape(
         (sposcar["nc"],sposcar["nb"],sposcar["na"],-1))
-    indices=numpy.rollaxis(indices,3,0).flatten()
+    indices=np.rollaxis(indices,3,0).flatten()
     return indices.argsort().tolist()
 
 
@@ -195,9 +195,10 @@ if __name__=="__main__":
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
-    print "Calling experimental function nofortran_wedge()"
-    wedgeres=thirdorder_core.nofortran_pywedge(poscar,sposcar,symops,frange,
-                                               dmin,nequi,shifts)
+    print "Calling experimental constructor Wedge()"
+    wedge=thirdorder_core.Wedge(poscar,sposcar,symops,dmin,
+                                nequi,shifts,frange)
+    wedgeres=wedge.wedgeres
     print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
     list4=build_list4(wedgeres)
     nirred=len(list4)
@@ -252,7 +253,7 @@ if __name__=="__main__":
             print "- \t Average force:"
             print "- \t {} eV/(A * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
-        phipart=numpy.zeros((3,nirred,ntot))
+        phipart=np.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
             for n in xrange(4):
                 isign=(-1)**(n//2)
