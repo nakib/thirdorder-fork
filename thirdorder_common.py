@@ -186,28 +186,6 @@ def move_two_atoms(poscar,iat,icoord,ih,jat,jcoord,jh):
     return nruter
 
 
-def build_list4(wedgeres):
-    """
-    Build a list of 4-uples from the result of wedge.
-    """
-    ntotalindependent=sum(wedgeres["NIndependentBasis"])
-    list6=[]
-    for ii in xrange(wedgeres["Nlist"]):
-        for jj in xrange(wedgeres["NIndependentBasis"][ii]):
-            ll=wedgeres["IndependentBasis"][jj,ii]//9
-            mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
-            nn=wedgeres["IndependentBasis"][jj,ii]%3
-            list6.append(
-                (ll,wedgeres["List"][0,ii],
-                 mm,wedgeres["List"][1,ii],
-                 nn,wedgeres["List"][2,ii]))
-    aux=collections.OrderedDict()
-    for i in list6:
-        fournumbers=(i[1],i[3],i[0],i[2])
-        aux[fournumbers]=None
-    return aux.keys()
-
-
 def write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,filename):
     """
     Write out the full anharmonic interatomic force constant matrix,

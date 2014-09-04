@@ -200,7 +200,7 @@ if __name__=="__main__":
                                 nequi,shifts,frange)
     wedgeres=wedge.wedgeres
     print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
-    list4=build_list4(wedgeres)
+    list4=wedge.build_list4()
     nirred=len(list4)
     nruns=4*nirred
     print "- {} DFT runs are needed".format(nruns)

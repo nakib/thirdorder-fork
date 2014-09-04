@@ -25,7 +25,9 @@
 from libc.stdlib cimport malloc,free,div,div_t
 from libc.math cimport round,fabs,sqrt
 
+import sys
 import copy
+import collections
 
 import numpy as np
 import scipy as sp
@@ -61,6 +63,36 @@ cdef inline int _ind2id(int[:] icell,int ispecies,int[:] ngrid,int nspecies):
     Merge a set of cell+atom indices into a single index into a supercell.
     """
     return (icell[0]+(icell[1]+icell[2]*ngrid[1])*ngrid[0])*nspecies+ispecies
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
+    """
+    Return True if triplet is found in llist[:,:nlist]. The first dimension
+    of list must have a length of 3.
+    """
+    cdef int i
+
+    for i in xrange(nlist):
+        if (triplet[0]==llist[0,i] and
+            triplet[1]==llist[1,i] and triplet[2]==llist[2,i]):
+            return True
+    return False
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
+   """
+   Return True if two triplets are equal and False otherwise.
+   """
+   cdef int i
+
+   for i in xrange(3):
+       if triplet1[i]!=triplet2[i]:
+           return False
+   return True
 
 
 @cython.boundscheck(False)
@@ -258,7 +290,9 @@ cdef class SymmetryOperations:
               vr_out[jj,ii]+=self.__ctranslations[ii,jj]
       return r_out
 
-  cpdef map_supercell(self,dict sposcar):
+  @cython.boundscheck(False)
+  @cython.wraparound(False)
+  cdef map_supercell(self,dict sposcar):
       """
       Each symmetry operation defines an atomic permutation in a supercell. This method
       returns an array with those permutations. The supercell must be compatible with
@@ -314,12 +348,14 @@ cdef class SymmetryOperations:
               v_nruter[isym,i]=_ind2id(vec,ispecies,ngrid,natoms)
       return nruter
 
+
 @cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     """
     Recover the full anharmonic IFC set from the irreducible set of
-    force constants and the information obtained from wedge().
+    force constants and the information contained in a wedge object.
     """
+    cdef bint nonzero
     cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
     cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex,nrows,ncols
     cdef int[:] naccumindependent
@@ -444,8 +480,6 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     return vnruter
 
 
-import sys
-
 #### Experimental section: Cython replacements of old Fortran functions.
 cdef class Wedge:
     """
@@ -454,15 +488,20 @@ cdef class Wedge:
     matrix from them.
     """
     cdef readonly SymmetryOperations symops
-    cdef readonly dict poscar
-    cdef readonly dict sposcar
-    cdef readonly dict wedgeres
-    cdef int[:,:] nequi
+    cdef readonly dict poscar,sposcar,wedgeres
+    cdef int allocsize,allallocsize,nalllist
+    cdef readonly int nlist
+    cdef readonly np.ndarray nequi,llist,allequilist
+    cdef readonly np.ndarray nindependentbasis,independentbasis
+    cdef readonly np.ndarray transformationarray
+    cdef np.ndarray alllist,transformation,transformationaux
+
+    cdef int[:,:] nequis
     cdef int[:,:,:] shifts
     cdef double[:,:] dmin
     cdef readonly double frange
 
-    def __cinit__(self,poscar,sposcar,symops,dmin,nequi,shifts,frange):
+    def __cinit__(self,poscar,sposcar,symops,dmin,nequis,shifts,frange):
         """
         Build the object by computing all the relevant information about
         irreducible IFCs.
@@ -471,12 +510,66 @@ cdef class Wedge:
         self.sposcar=sposcar
         self.symops=symops
         self.dmin=dmin
-        self.nequi=nequi
+        self.nequis=nequis
         self.shifts=shifts
         self.frange=frange
 
+        self.allocsize=0
+        self.allallocsize=0
+        self._expandlist()
+        self._expandalllist()
+
         self._reduce()
 
+    cdef _expandlist(self):
+        """
+        Expand nequi, allequilist, transformationarray, transformation,
+        transformationaux, nindependentbasis, independentbasis,
+        and llist to accommodate more elements.
+        """
+        if self.allocsize==0:
+            self.allocsize=16
+            self.nequi=np.empty(self.allocsize,dtype=np.intc)
+            self.allequilist=np.empty((3,6*self.symops.nsyms,
+                                       self.allocsize),dtype=np.intc)
+            self.transformationarray=np.empty((27,27,6*self.symops.nsyms,
+                                               self.allocsize),dtype=np.double)
+            self.transformation=np.empty((27,27,6*self.symops.nsyms,
+                                               self.allocsize),dtype=np.double)
+            self.transformationaux=np.empty((27,27,self.allocsize),
+                                            dtype=np.double)
+            self.nindependentbasis=np.empty(self.allocsize,dtype=np.intc)
+            self.independentbasis=np.empty((27,self.allocsize),dtype=np.intc)
+            self.llist=np.empty((3,self.allocsize),dtype=np.intc)
+        else:
+            self.allocsize<<=1
+            self.nequi=np.concatenate((self.nequi,self.nequi),axis=-1)
+            self.allequilist=np.concatenate((self.allequilist,self.allequilist),axis=-1)
+            self.transformation=np.concatenate((self.transformation,self.transformation),
+                                               axis=-1)
+            self.transformationarray=np.concatenate((self.transformationarray,
+                                                     self.transformationarray),axis=-1)
+            self.transformationaux=np.concatenate((self.transformationaux,
+                                                   self.transformationaux),axis=-1)
+            self.nindependentbasis=np.concatenate((self.nindependentbasis,self.nindependentbasis),
+                                                  axis=-1)
+            self.independentbasis=np.concatenate((self.independentbasis,self.independentbasis),
+                                                 axis=-1)
+            self.llist=np.concatenate((self.llist,self.llist),axis=-1)
+
+    cdef _expandalllist(self):
+        """
+        Expand alllist  to accommodate more elements.
+        """
+        if self.allallocsize==0:
+            self.allallocsize=512
+            self.alllist=np.empty((3,self.allallocsize),dtype=np.intc)
+        else:
+            self.allallocsize<<=1
+            self.alllist=np.concatenate((self.alllist,self.alllist),axis=-1)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cdef _reduce(self):
         """
         C-level method that performs most of the actual work.
@@ -486,15 +579,19 @@ cdef class Wedge:
         cdef int ibasis,jbasis,kbasis,ibasisprime,jbasisprime,kbasisprime
         cdef int ipermutation,iel
         cdef int indexijk,indexijkprime,indexrow
-        cdef int[:] ngrid,ind_species,vec1,vec2,vec3
+        cdef int[:] ngrid,ind_species,vec1,vec2,vec3,independent
+        cdef int[:] v_nequi,v_nindependentbasis
+        cdef int[:] basis,triplet,triplet_permutation,triplet_sym
+        cdef int[:,:] v_llist,v_alllist,v_independentbasis
         cdef int[:,:] shifts27,shift2all,shift3all,
         cdef int[:,:] equilist,id_equi,ind_cell
+        cdef int[:,:,:] v_allequilist
         cdef double dist,frange2
         cdef double[:] car2,car3
-        cdef double[:,:] latvec,coord,coordall,BB
+        cdef double[:,:] latvec,coord,coordall,BB,b,coeffi,coeffi_reduced
         cdef double[:,:,:] orth
-        cdef list llist,nequi,allequilist,alllist
-        cdef list transformation,transformationaux,independentbasis
+        cdef double[:,:,:] v_transformationaux
+        cdef double[:,:,:,:] v_transformationarray,v_transformation
 
         frange2=self.frange*self.frange
 
@@ -517,13 +614,17 @@ cdef class Wedge:
         car3=np.empty(3,dtype=np.double)
 
         summ=0
-        llist=[]
-        nequi=[]
-        allequilist=[]
-        transformation=[]
-        transformationaux=[]
-        independentbasis=[]
-        alllist=[]
+        self.nlist=0
+        self.nalllist=0
+        v_nequi=self.nequi
+        v_allequilist=self.allequilist
+        v_transformation=self.transformation
+        v_transformationarray=self.transformationarray
+        v_transformationaux=self.transformationaux
+        v_nindependentbasis=self.nindependentbasis
+        v_independentbasis=self.independentbasis
+        v_llist=self.llist
+        v_alllist=self.alllist
 
         iaux=0
         shifts27=np.empty((27,3),dtype=np.intc)
@@ -535,10 +636,15 @@ cdef class Wedge:
                     shifts27[iaux,2]=kk
                     iaux+=1
 
+        basis=np.empty(3,dtype=np.intc)
+        triplet=np.empty(3,dtype=np.intc)
+        triplet_permutation=np.empty(3,dtype=np.intc)
+        triplet_sym=np.empty(3,dtype=np.intc)
         shift2all=np.empty((3,27),dtype=np.intc)
         shift3all=np.empty((3,27),dtype=np.intc)
         BB=np.empty((27,27),dtype=np.double)
         equilist=np.empty((3,nsymm*6),dtype=np.intc)
+        coeffi=np.empty((6*nsymm*27,27),dtype=np.double)
         id_equi=self.symops.map_supercell(self.sposcar)
         ind_cell,ind_species=_id2ind(ngrid,natoms)
         for ii in xrange(natoms):
@@ -546,14 +652,14 @@ cdef class Wedge:
                 dist=self.dmin[ii,jj]
                 if dist>=self.frange:
                     continue
-                n2equi=self.nequi[ii,jj]
+                n2equi=self.nequis[ii,jj]
                 for kk in xrange(n2equi):
                     shift2all[:,kk]=shifts27[self.shifts[ii,jj,kk],:]
                 for kk in xrange(ntot):
                     dist=self.dmin[ii,kk]
                     if dist>=self.frange:
                         continue
-                    n3equi=self.nequi[ii,kk]
+                    n3equi=self.nequis[ii,kk]
                     for ll in xrange(n3equi):
                         shift3all[:,ll]=shifts27[self.shifts[ii,kk,ll],:]
                     d2_min=np.inf
@@ -576,22 +682,36 @@ cdef class Wedge:
                     if d2_min>=frange2:
                         continue
                     summ+=1
-                    triplet=[ii,jj,kk]
-                    if triplet in alllist:
+                    triplet[0]=ii
+                    triplet[1]=jj
+                    triplet[2]=kk
+                    if _triplet_in_list(triplet,v_alllist,self.nalllist):
                         continue
-                    llist.append(triplet)
-                    nequi.append(0)
-                    allequilist.append([])
-                    coeffi=np.zeros((6*nsymm*27,27),dtype=np.double)
+                    self.nlist+=1
+                    if self.nlist==self.allocsize:
+                        self._expandlist()
+                        v_nequi=self.nequi
+                        v_allequilist=self.allequilist
+                        v_transformation=self.transformation
+                        v_transformationarray=self.transformationarray
+                        v_transformationaux=self.transformationaux
+                        v_nindependentbasis=self.nindependentbasis
+                        v_independentbasis=self.independentbasis
+                        v_llist=self.llist
+                    v_llist[0,self.nlist-1]=ii
+                    v_llist[1,self.nlist-1]=jj
+                    v_llist[2,self.nlist-1]=kk
+                    v_nequi[self.nlist-1]=0
+                    coeffi[:,:]=0.
                     nnonzero=0
-                    transformation.append([])
                     for ipermutation in xrange(6):
-                        triplet_permutation=[triplet[iel]
-                                             for iel in permutations[ipermutation,:]]
+                        triplet_permutation[0]=triplet[permutations[ipermutation,0]]
+                        triplet_permutation[1]=triplet[permutations[ipermutation,1]]
+                        triplet_permutation[2]=triplet[permutations[ipermutation,2]]
                         for isym in xrange(nsymm):
-                            triplet_sym=[id_equi[isym,triplet_permutation[0]],
-                                         id_equi[isym,triplet_permutation[1]],
-                                         id_equi[isym,triplet_permutation[2]]]
+                            triplet_sym[0]=id_equi[isym,triplet_permutation[0]]
+                            triplet_sym[1]=id_equi[isym,triplet_permutation[1]]
+                            triplet_sym[2]=id_equi[isym,triplet_permutation[2]]
                             for ll in xrange(3):
                                 vec1[ll]=ind_cell[ll,id_equi[isym,triplet_permutation[0]]]
                                 vec2[ll]=ind_cell[ll,id_equi[isym,triplet_permutation[1]]]
@@ -599,11 +719,10 @@ cdef class Wedge:
                             ispecies1=ind_species[id_equi[isym,triplet_permutation[0]]]
                             ispecies2=ind_species[id_equi[isym,triplet_permutation[1]]]
                             ispecies3=ind_species[id_equi[isym,triplet_permutation[2]]]
-                            for ll in xrange(3):
-                                vec2[ll]=(vec2[ll]-vec1[ll])%ngrid[ll]
-                                vec3[ll]=(vec3[ll]-vec1[ll])%ngrid[ll]
-                            if not vec1[0]==vec1[1]==vec1[2]:
+                            if not vec1[0]==vec1[1]==vec1[2]==0:
                                 for ll in xrange(3):
+                                    vec3[ll]=(vec3[ll]-vec1[ll])%ngrid[ll]
+                                    vec2[ll]=(vec2[ll]-vec1[ll])%ngrid[ll]
                                     vec1[ll]=0
                                 triplet_sym[0]=_ind2id(vec1,ispecies1,ngrid,natoms)
                                 triplet_sym[1]=_ind2id(vec2,ispecies2,ngrid,natoms)
@@ -611,76 +730,115 @@ cdef class Wedge:
                             for ibasisprime in xrange(3):
                                 for jbasisprime in xrange(3):
                                     for kbasisprime in xrange(3):
-                                        indexijkprime=ibasisprime*9+jbasisprime*3+kbasisprime
-                                        indexrow=ipermutation*nsymm*27+isym*27+indexijkprime
+                                        indexijkprime=(ibasisprime*3+jbasisprime)*3+kbasisprime
+                                        indexrow=(ipermutation*nsymm+isym)*27+indexijkprime
                                         for ibasis in xrange(3):
+                                            basis[0]=ibasis
                                             for jbasis in xrange(3):
+                                                basis[1]=jbasis
                                                 for kbasis in xrange(3):
+                                                    basis[2]=kbasis
                                                     indexijk=ibasis*9+jbasis*3+kbasis
-                                                    ibasispermut,jbasispermut,kbasispermut=[
-                                                        [ibasis,jbasis,kbasis][iel] for
-                                                        iel in permutations[ipermutation,:]]
+                                                    ibasispermut=basis[permutations[ipermutation,0]]
+                                                    jbasispermut=basis[permutations[ipermutation,1]]
+                                                    kbasispermut=basis[permutations[ipermutation,2]]
                                                     BB[indexijkprime,indexijk]=(
                                                         orth[ibasisprime,ibasispermut,isym]*
                                                         orth[jbasisprime,jbasispermut,isym]*
                                                         orth[kbasisprime,kbasispermut,isym])
-                            iaux=1
-                            if not (ipermutation==0 and isym==0):
-                                for ll in xrange(nequi[-1]):
-                                    if triplet_sym==list(equilist[:,ll]):
-                                        iaux=0
-                            if iaux==1 and ((ipermutation==0 and isym==0) or triplet_sym!=triplet):
-                                nequi[-1]+=1
+                            if (ipermutation==0 and isym==0) or not (
+                                    _triplets_are_equal(triplet_sym,triplet) or
+                                    _triplet_in_list(triplet_sym,equilist,v_nequi[self.nlist-1])):
+                                v_nequi[self.nlist-1]+=1
                                 for ll in xrange(3):
-                                    equilist[ll,nequi[-1]-1]=triplet_sym[ll]
-                                allequilist[-1].append(triplet_sym)
-                                alllist.append(triplet_sym)
-                                transformation[-1].append(np.array(BB))
-                            if triplet_sym==triplet:
+                                    equilist[ll,v_nequi[self.nlist-1]-1]=triplet_sym[ll]
+                                    v_allequilist[ll,v_nequi[self.nlist-1]-1,
+                                                  self.nlist-1]=triplet_sym[ll]
+                                self.nalllist+=1
+                                if self.nalllist==self.allallocsize:
+                                    self._expandalllist()
+                                    v_alllist=self.alllist
+                                for ll in xrange(3):
+                                    v_alllist[ll,self.nalllist-1]=triplet_sym[ll]
+                                for iaux in xrange(27):
+                                    for jaux in xrange(27):
+                                        v_transformation[iaux,jaux,v_nequi[self.nlist-1]-1,
+                                                         self.nlist-1]=BB[iaux,jaux]
+                            if _triplets_are_equal(triplet_sym,triplet):
                                 for indexijkprime in xrange(27):
                                     nonzero=False
+                                    BB[indexijkprime,indexijkprime]-=1.
                                     for indexijk in xrange(27):
-                                        if indexijkprime==indexijk:
-                                            BB[indexijkprime,indexijk]-=1.
-                                        if abs(BB[indexijkprime,indexijk])>1e-12:
+                                        if fabs(BB[indexijkprime,indexijk])>1e-12:
                                             nonzero=True
                                         else:
                                             BB[indexijkprime,indexijk]=0.
                                     if nonzero:
-                                        coeffi[nnonzero,:]=BB[indexijkprime,:]
+                                        for ll in xrange(27):
+                                            coeffi[nnonzero,ll]=BB[indexijkprime,ll]
                                         nnonzero+=1
                     coeffi_reduced=np.zeros((max(nnonzero,27),27),dtype=np.double)
-                    coeffi_reduced[:nnonzero,:]=coeffi[:nnonzero,:]
+                    for iaux in xrange(nnonzero):
+                        for jaux in xrange(27):
+                            coeffi_reduced[iaux,jaux]=coeffi[iaux,jaux]
                     b,independent=gaussian(coeffi_reduced)
-                    transformationaux.append(b)
-                    independentbasis.append(independent)
-        transformationarray=np.zeros((27,27,nsymm*6,len(llist)),dtype=np.double)
-        for ii in xrange(len(llist)):
-            for jj in xrange(nequi[ii]):
-                transformationarray[:,:len(independentbasis[ii]),jj,ii]=np.dot(
-                    transformation[ii][jj][:,:],
-                    transformationaux[ii][:,:len(independentbasis[ii])])
+                    for iaux in xrange(27):
+                        for jaux in xrange(27):
+                            v_transformationaux[iaux,jaux,self.nlist-1]=b[iaux,jaux]
+                    v_nindependentbasis[self.nlist-1]=independent.shape[0]
+                    for ll in xrange(independent.shape[0]):
+                        v_independentbasis[ll,self.nlist-1]=independent[ll]
+        v_transformationarray[:,:,:,:]=0.
+        for ii in xrange(self.nlist):
+            for jj in xrange(v_nequi[ii]):
+                for kk in xrange(27):
+                    for ll in xrange(v_nindependentbasis[ii]):
+                        for iaux in xrange(27):
+                            v_transformationarray[kk,ll,jj,ii]+=(
+                                v_transformation[kk,iaux,jj,ii]*
+                                v_transformationaux[iaux,ll,ii])
                 for kk in xrange(27):
                     for ll in xrange(27):
-                        if abs(transformationarray[kk,ll,jj,ii])<1e-12:
-                            transformationarray[kk,ll,jj,ii]=0.
-        # TODO: examine carefully
-        print llist
-        nlist=len(llist)
+                        if fabs(v_transformationarray[kk,ll,jj,ii])<1e-12:
+                            v_transformationarray[kk,ll,jj,ii]=0.
+
+        coords="xyz"
+        for ii in xrange(self.nlist):
+            print "-".join([str(i) for i in self.llist[:,ii]])
+            for jj in xrange(self.nindependentbasis[ii]):
+                ll=self.independentbasis[jj,ii]//9
+                mm=(self.independentbasis[jj,ii]%9)//3
+                nn=self.independentbasis[jj,ii]%3
+                print "\t","".join([coords[i] for i in [ll,mm,nn]])
+                            
         self.wedgeres=dict()
-        self.wedgeres["Nlist"]=nlist
-        self.wedgeres["Nequi"]=np.array(nequi)
-        self.wedgeres["List"]=np.array(llist).T
-        self.wedgeres["NIndependentBasis"]=np.array([len(i) for i in independentbasis])
-        self.wedgeres["ALLEquiList"]=np.empty((nlist,nsymm*6,3),dtype=np.intc)
-        self.wedgeres["IndependentBasis"]=np.empty((nlist,27),dtype=np.intc)
-        for i in xrange(nlist):
-            for j in xrange(nequi[i]):
-                self.wedgeres["ALLEquiList"][i,j,:]=allequilist[i][j]
-            self.wedgeres["IndependentBasis"][i,:len(independentbasis[i])]=independentbasis[i]
-        self.wedgeres["IndependentBasis"]=self.wedgeres["IndependentBasis"].T
-        self.wedgeres["TransformationArray"]=transformationarray
-        self.wedgeres["ALLEquiList"]=np.transpose(self.wedgeres["ALLEquiList"],(2,1,0))
+        self.wedgeres["Nlist"]=self.nlist
+        self.wedgeres["Nequi"]=self.nequi
+        self.wedgeres["List"]=self.llist
+        self.wedgeres["NIndependentBasis"]=self.nindependentbasis
+        self.wedgeres["ALLEquiList"]=self.allequilist
+        self.wedgeres["IndependentBasis"]=self.independentbasis
+        self.wedgeres["TransformationArray"]=self.transformationarray
+
+    def build_list4(self):
+        """
+        Build a list of 4-uples from the results of the reduction.
+        """
+        ntotalindependent=sum(self.wedgeres["NIndependentBasis"])
+        list6=[]
+        for ii in xrange(self.nlist):
+            for jj in xrange(self.nindependentbasis[ii]):
+                ll=self.independentbasis[jj,ii]//9
+                mm=(self.independentbasis[jj,ii]%9)//3
+                nn=self.independentbasis[jj,ii]%3
+                list6.append((ll,self.llist[0,ii],
+                        mm,self.llist[1,ii],
+                        nn,self.llist[2,ii]))
+        aux=collections.OrderedDict()
+        for i in list6:
+            fournumbers=(i[1],i[3],i[0],i[2])
+            aux[fournumbers]=None
+        return aux.keys()
 
 
 DEF EPS=1e-10
@@ -737,4 +895,4 @@ cdef tuple gaussian(double[:,:] a):
         for i in xrange(ndependent):
             b[dependent[i],j]=-a[i,independent[j]]
         b[independent[j],j]=1.
-    return (b,list(independent[:nindependent]))
+    return (b,independent[:nindependent])
