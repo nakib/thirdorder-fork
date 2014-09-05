@@ -21,6 +21,7 @@
 
 import sys
 import os
+import os.path
 import copy
 import itertools
 import contextlib

@@ -17,14 +17,16 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
+
 # This file contains Cython wrappers allowing the relevant functions
 # in spglib need to be used from Python.
 # The algorithms for finding minimal sets of interatomic force constants
 # and for reconstructing the full set from such a minimal subset are
 # also implemented in this file in the interest of efficiency.
 
-from libc.stdlib cimport malloc,free,div,div_t
-from libc.math cimport round,fabs,sqrt
+from libc.stdlib cimport malloc,free
+from libc.math cimport floor,fabs
 
 import heapq
 
@@ -105,10 +107,9 @@ cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
 @cython.wraparound(False)
 cdef tuple _id2ind(int[:] ngrid,int nspecies):
     """
-    Create a map between supercell indices to cell+atom indices.
+    Create a map from supercell indices to cell+atom indices.
     """
-    cdef div_t tmp
-    cdef int ii,ntot
+    cdef int ii,ntot,tmp
     cdef int[:,:] icell
     cdef int[:] ispecies
 
@@ -120,13 +121,9 @@ cdef tuple _id2ind(int[:] ngrid,int nspecies):
     icell=np_icell
     ispecies=np_ispecies
     for ii in xrange(ntot):
-        tmp=div(ii,nspecies)
-        ispecies[ii]=tmp.rem
-        tmp=div(tmp.quot,ngrid[0])
-        icell[0,ii]=tmp.rem
-        tmp=div(tmp.quot,ngrid[1])
-        icell[1,ii]=tmp.rem
-        icell[2,ii]=tmp.quot
+        tmp,ispecies[ii]=divmod(ii,nspecies)
+        tmp,icell[0,ii]=divmod(tmp,ngrid[0])
+        icell[2,ii],icell[1,ii]=divmod(tmp,ngrid[1])
     return (np_icell,np_ispecies)
 
 
@@ -146,8 +143,7 @@ cdef class SymmetryOperations:
   cdef double[:,:,:] __crotations
   cdef double[:,:] __translations
   cdef double[:,:] __ctranslations
-  cdef double[:] __norms
-  cdef double c_latvectors[3][3]
+  cdef double c_lattvectors[3][3]
   cdef int *c_types
   cdef double (*c_positions)[3]
   cdef readonly int natoms,nsyms
@@ -199,7 +195,7 @@ cdef class SymmetryOperations:
       cdef int i,j
       for i in xrange(3):
           for j in xrange(3):
-              self.c_latvectors[i][j]=self.__lattvectors[i,j]
+              self.c_lattvectors[i][j]=self.__lattvectors[i,j]
       for i in xrange(self.natoms):
           self.c_types[i]=self.__types[i]
           for j in xrange(3):
@@ -216,7 +212,7 @@ cdef class SymmetryOperations:
       cdef double[:,:] lat,tmp2d
       cdef double[:,:,:] rot
       cdef cthirdorder_core.SpglibDataset *data
-      data=cthirdorder_core.spg_get_dataset(self.c_latvectors,
+      data=cthirdorder_core.spg_get_dataset(self.c_lattvectors,
                                             self.c_positions,
                                             self.c_types,
                                             self.natoms,
@@ -258,11 +254,6 @@ cdef class SymmetryOperations:
       self.__lattvectors=np.array(lattvectors,dtype=np.double)
       self.__types=np.array(types,dtype=np.intc)
       self.__positions=np.array(positions,dtype=np.double)
-      self.__norms=np.empty((3,),dtype=np.double)
-      for i in xrange(3):
-          self.__norms[i]=sqrt(lattvectors[i,0]**2+
-                               lattvectors[i,1]**2+
-                               lattvectors[i,2]**2)
       self.natoms=self.positions.shape[0]
       self.symprec=symprec
       if self.__positions.shape[0]!=self.natoms or self.__positions.shape[1]!=3:
@@ -310,33 +301,34 @@ cdef class SymmetryOperations:
       cdef int[:,:] v_nruter
       cdef double dmin
       cdef double[:] car,diffs
-      cdef double[:,:] car_sym,positions,latvec,tmp
+      cdef double[:,:] car_sym,positions,slattvec
+      cdef np.ndarray tmp
       cdef np.ndarray nruter
 
       positions=sposcar["positions"]
-      latvec=sposcar["lattvec"]
+      slattvec=sposcar["lattvec"]
       ngrid=np.array([sposcar["na"],sposcar["nb"],sposcar["nc"]],
                      dtype=np.intc)
       ntot=positions.shape[1]
       natoms=ntot//(ngrid[0]*ngrid[1]*ngrid[2])
       nruter=np.empty((self.nsyms,ntot),dtype=np.intc)
-      car=np.empty(3)
+      car=np.empty(3,dtype=np.double)
       v_nruter=nruter
       vec=np.empty(3,dtype=np.intc)
       diffs=np.zeros(natoms,dtype=np.double)
       for i in xrange(ntot):
           for ii in xrange(3):
-              car[ii]=(positions[0,i]*latvec[ii,0]+
-                       positions[1,i]*latvec[ii,1]+
-                       positions[2,i]*latvec[ii,2])
+              car[ii]=(positions[0,i]*slattvec[ii,0]+
+                       positions[1,i]*slattvec[ii,1]+
+                       positions[2,i]*slattvec[ii,2])
           car_sym=self.__apply_all(car)
-          tmp=np.mod(sp.linalg.solve(latvec,car_sym),1.)
+          tmp=np.remainder(sp.linalg.solve(slattvec,car_sym),1.)
           for ii in xrange(3):
               for isym in xrange(self.nsyms):
                   tmp[ii,isym]*=ngrid[ii]
           for isym in xrange(self.nsyms):
               for ii in xrange(3):
-                  vec[ii]=int(round(tmp[ii,isym]))
+                  vec[ii]=int(floor(tmp[ii,isym]))%ngrid[ii]
                   tmp[ii,isym]-=vec[ii]
               for ii in xrange(natoms):
                   diffs[ii]=(fabs(tmp[0,isym]-self.__positions[ii,0])+
@@ -373,7 +365,7 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     nlist=wedge.nlist
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
-    vnruter=np.zeros((3,3,3,natoms,ntot,ntot))
+    vnruter=np.zeros((3,3,3,natoms,ntot,ntot),dtype=np.double)
     naccumindependent=np.insert(np.cumsum(
         wedge.nindependentbasis[:nlist],dtype=np.intc),0,[0])
     ntotalindependent=naccumindependent[-1]
@@ -392,7 +384,7 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
                                   wedge.llist[0,ii],
                                   wedge.llist[1,ii],
                                   wedge.llist[2,ii]])
-    aphilist=np.array(philist)
+    aphilist=np.array(philist,dtype=np.double)
     vind1=-np.ones((natoms,ntot,ntot),dtype=np.intc)
     vind2=-np.ones((natoms,ntot,ntot),dtype=np.intc)
     vequilist=wedge.allequilist
@@ -412,7 +404,7 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
 
     if nrows*ncols<=MAXDENSE:
         print "- Storing the coefficients in a dense matrix"
-        aa=np.zeros((nrows,ncols))
+        aa=np.zeros((nrows,ncols),dtype=np.double)
         vaa=aa
         colindex=0
         for ii in xrange(natoms):
@@ -592,7 +584,7 @@ cdef class Wedge:
         cdef int[:,:,:] v_allequilist
         cdef double dist,frange2
         cdef double[:] car2,car3,tmp
-        cdef double[:,:] latvec,coordall,b,coeffi,coeffi_reduced
+        cdef double[:,:] lattvec,coordall,b,coeffi,coeffi_reduced
         cdef double[:,:,:] orth
         cdef double[:,:,:] v_transformationaux
         cdef double[:,:,:,:] rot,rot2
@@ -612,8 +604,8 @@ cdef class Wedge:
         vec2=np.empty(3,dtype=np.intc)
         vec3=np.empty(3,dtype=np.intc)
 
-        latvec=self.sposcar["lattvec"]
-        coordall=np.dot(latvec,self.sposcar["positions"])
+        lattvec=self.sposcar["lattvec"]
+        coordall=np.dot(lattvec,self.sposcar["positions"])
         orth=np.transpose(self.symops.crotations,(1,2,0))
         car2=np.empty(3,dtype=np.double)
         car3=np.empty(3,dtype=np.double)
@@ -705,15 +697,15 @@ cdef class Wedge:
                     d2_min=np.inf
                     for iaux in xrange(n2equi):
                         for ll in xrange(3):
-                            car2[ll]=(shift2all[0,iaux]*latvec[ll,0]+
-                                      shift2all[1,iaux]*latvec[ll,1]+
-                                      shift2all[2,iaux]*latvec[ll,2]+
+                            car2[ll]=(shift2all[0,iaux]*lattvec[ll,0]+
+                                      shift2all[1,iaux]*lattvec[ll,1]+
+                                      shift2all[2,iaux]*lattvec[ll,2]+
                                       coordall[ll,jj])
                         for jaux in xrange(n3equi):
                             for ll in xrange(3):
-                                car3[ll]=(shift3all[0,jaux]*latvec[ll,0]+
-                                          shift3all[1,jaux]*latvec[ll,1]+
-                                          shift3all[2,jaux]*latvec[ll,2]+
+                                car3[ll]=(shift3all[0,jaux]*lattvec[ll,0]+
+                                          shift3all[1,jaux]*lattvec[ll,1]+
+                                          shift3all[2,jaux]*lattvec[ll,2]+
                                           coordall[ll,kk])
                         d2_min=min(d2_min,
                                    (car3[0]-car2[0])**2+
@@ -874,7 +866,7 @@ cdef tuple gaussian(double[:,:] a):
 
     dependent=np.empty(col,dtype=np.intc)
     independent=np.empty(col,dtype=np.intc)
-    b=np.zeros((col,col))
+    b=np.zeros((col,col),dtype=np.double)
 
     irow=0
     ndependent=0

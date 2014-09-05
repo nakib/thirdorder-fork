@@ -19,9 +19,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os.path
 import re
-import glob
 import ast
 
 import thirdorder_core
@@ -30,6 +28,7 @@ from thirdorder_common import *
 # Conversion factors (source: CODATA 2010)
 BOHR_RADIUS=5.2917721092e-2 # nm
 RYDBERG=13.60569253 # eV
+
 
 def qe_cell(ibrav,celldm):
     """
@@ -180,6 +179,7 @@ def qe_cell(ibrav,celldm):
         raise ValueError("unknown ibrav")
     return nruter
 
+
 def eval_qe_algebraic(expression):
     """
     Return the value of an algebraic expression of
@@ -329,7 +329,7 @@ def read_qe_in(filename):
         nruter["positions"]*=.1
     if poskind!="crystal":
         nruter["positions"]=sp.linalg.solve(nruter["lattvec"],
-                                               nruter["positions"])
+                                            nruter["positions"])
     aux=collections.OrderedDict()
     for e in nruter["elements"]:
         aux[e]=None
@@ -470,11 +470,15 @@ if __name__=="__main__":
     print "- {} DFT runs are needed".format(nruns)
     if action=="sow":
         print sowblock
-        print "Writing undisplaced coordinates to BASE.{}".format(sfilename)
-        write_supercell(sfilename,sposcar,"BASE.{}".format(sfilename))
+        print "Writing undisplaced coordinates to BASE.{}".format(
+            os.path.basename(sfilename))
+        write_supercell(sfilename,sposcar,"BASE.{}".format(
+                os.path.basename(sfilename)))
         width=len(str(4*(len(list4)+1)))
-        namepattern="DISP.{}.{{0:0{}d}}".format(sfilename,width)
-        print "Writing displaced coordinates to DISP.{}.*".format(sfilename)
+        namepattern="DISP.{}.{{0:0{}d}}".format(os.path.basename(sfilename),
+                                                width)
+        print "Writing displaced coordinates to DISP.{}.*".format(
+            os.path.basename(sfilename))
         for i,e in enumerate(list4):
             for n in xrange(4):
                 isign=(-1)**(n//2)
