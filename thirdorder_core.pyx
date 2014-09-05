@@ -18,12 +18,15 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # This file contains Cython wrappers allowing the relevant functions
-# in spglib need to be used from Python. The reconstruction of the
-# anharmonic interatomic constant set from the minimal set of
-# constants is also implemented in this file for efficiency.
+# in spglib need to be used from Python.
+# The algorithms for finding minimal sets of interatomic force constants
+# and for reconstructing the full set from such a minimal subset are
+# also implemented in this file in the interest of efficiency.
 
 from libc.stdlib cimport malloc,free,div,div_t
 from libc.math cimport round,fabs,sqrt
+
+import heapq
 
 import sys
 import copy
@@ -572,22 +575,24 @@ cdef class Wedge:
         """
         C-level method that performs most of the actual work.
         """
-        cdef int ngrid1,ngrid2,ngrid3,nsymm,natoms,ntot,summ
+        cdef int ngrid1,ngrid2,ngrid3,nsym,natoms,ntot,summ,nnonzero
         cdef int ii,jj,kk,ll,iaux,jaux
         cdef int ibasis,jbasis,kbasis,ibasisprime,jbasisprime,kbasisprime
-        cdef int ipermutation,indexijk,indexijkprime
+        cdef int iperm,isym,indexijk,indexijkprime
         cdef int[:] ngrid,ind_species,vec1,vec2,vec3,independent
         cdef int[:] v_nequi,v_nindependentbasis
-        cdef int[:] basis,triplet,triplet_permutation,triplet_sym
+        cdef int[:] basis,triplet,triplet_perm,triplet_sym
         cdef int[:,:] v_llist,v_alllist,v_independentbasis
-        cdef int[:,:] shifts27,shift2all,shift3all,
+        cdef int[:,:] shifts27,shift2all,shift3all
         cdef int[:,:] equilist,id_equi,ind_cell
+        cdef int[:,:,:] nonzero
         cdef int[:,:,:] v_allequilist
         cdef double dist,frange2
-        cdef double[:] car2,car3
-        cdef double[:,:] latvec,coordall,BB,b,coeffi,coeffi_reduced
+        cdef double[:] car2,car3,tmp
+        cdef double[:,:] latvec,coordall,b,coeffi,coeffi_reduced
         cdef double[:,:,:] orth
         cdef double[:,:,:] v_transformationaux
+        cdef double[:,:,:,:] rot,rot2
         cdef double[:,:,:,:] v_transformationarray,v_transformation
 
         # Preliminary work: memory allocation an initialization.
@@ -597,7 +602,7 @@ cdef class Wedge:
         ngrid2=self.sposcar["nb"]
         ngrid3=self.sposcar["nc"]
         ngrid=np.array([ngrid1,ngrid2,ngrid3],dtype=np.intc)
-        nsymm=self.symops.nsyms
+        nsym=self.symops.nsyms
         natoms=len(self.poscar["types"])
         ntot=len(self.sposcar["types"])
         vec1=np.empty(3,dtype=np.intc)
@@ -635,17 +640,49 @@ cdef class Wedge:
 
         basis=np.empty(3,dtype=np.intc)
         triplet=np.empty(3,dtype=np.intc)
-        triplet_permutation=np.empty(3,dtype=np.intc)
+        triplet_perm=np.empty(3,dtype=np.intc)
         triplet_sym=np.empty(3,dtype=np.intc)
         shift2all=np.empty((3,27),dtype=np.intc)
         shift3all=np.empty((3,27),dtype=np.intc)
-        BB=np.empty((27,27),dtype=np.double)
-        equilist=np.empty((3,nsymm*6),dtype=np.intc)
-        coeffi=np.empty((6*nsymm*27,27),dtype=np.double)
-
+        equilist=np.empty((3,nsym*6),dtype=np.intc)
+        coeffi=np.empty((6*nsym*27,27),dtype=np.double)
         id_equi=self.symops.map_supercell(self.sposcar)
         ind_cell,ind_species=_id2ind(ngrid,natoms)
 
+        # Rotation matrices for third derivatives and related quantities.
+        rot=np.empty((6,nsym,27,27),dtype=np.double)
+        for iperm in xrange(6):
+            for isym in xrange(nsym):
+                for ibasisprime in xrange(3):
+                    for jbasisprime in xrange(3):
+                        for kbasisprime in xrange(3):
+                            indexijkprime=(ibasisprime*3+jbasisprime)*3+kbasisprime
+                            for ibasis in xrange(3):
+                                basis[0]=ibasis
+                                for jbasis in xrange(3):
+                                    basis[1]=jbasis
+                                    for kbasis in xrange(3):
+                                        basis[2]=kbasis
+                                        indexijk=ibasis*9+jbasis*3+kbasis
+                                        ibasispermut=basis[permutations[iperm,0]]
+                                        jbasispermut=basis[permutations[iperm,1]]
+                                        kbasispermut=basis[permutations[iperm,2]]
+                                        rot[iperm,isym,indexijkprime,indexijk]=(
+                                            orth[ibasisprime,ibasispermut,isym]*
+                                            orth[jbasisprime,jbasispermut,isym]*
+                                            orth[kbasisprime,kbasispermut,isym])
+        rot2=rot.copy()
+        nonzero=np.zeros((6,nsym,27),dtype=np.intc)
+        for iperm in xrange(6):
+            for isym in xrange(nsym):
+                for indexijkprime in xrange(27):
+                    rot2[iperm,isym,indexijkprime,indexijkprime]-=1.
+                    for indexijk in xrange(27):
+                        if fabs(rot2[iperm,isym,indexijkprime,indexijk])>1e-12:
+                            nonzero[iperm,isym,indexijkprime]=1
+                        else:
+                            rot2[iperm,isym,indexijkprime,indexijk]=0.        
+        
         # Scan all atom triplets (ii,jj,kk) in the supercell.
         for ii in xrange(natoms):
             for jj in xrange(ntot):
@@ -691,8 +728,8 @@ cdef class Wedge:
                     if _triplet_in_list(triplet,v_alllist,self.nalllist):
                         continue
                     # This point is only reached if the triplet is not
-                    # equivalent to any of the triplets already
-                    # considered.
+                    # equivalent to any of the triplets already considered,
+                    # including permutations and symmetries.
                     self.nlist+=1
                     if self.nlist==self.allocsize:
                         self._expandlist()
@@ -711,50 +748,37 @@ cdef class Wedge:
                     coeffi[:,:]=0.
                     nnonzero=0
                     # Scan the six possible permutations of triplet (ii,jj,kk).
-                    for ipermutation in xrange(6):
-                        triplet_permutation[0]=triplet[permutations[ipermutation,0]]
-                        triplet_permutation[1]=triplet[permutations[ipermutation,1]]
-                        triplet_permutation[2]=triplet[permutations[ipermutation,2]]
-                        # Explore the effect of all symmetry
-                        # operations on each of the permuted triplets.
-                        for isym in xrange(nsymm):
-                            triplet_sym[0]=id_equi[isym,triplet_permutation[0]]
-                            triplet_sym[1]=id_equi[isym,triplet_permutation[1]]
-                            triplet_sym[2]=id_equi[isym,triplet_permutation[2]]
+                    for iperm in xrange(6):
+                        triplet_perm[0]=triplet[permutations[iperm,0]]
+                        triplet_perm[1]=triplet[permutations[iperm,1]]
+                        triplet_perm[2]=triplet[permutations[iperm,2]]
+                        # Explore the effect of all symmetry operations on each of
+                        # the permuted triplets.
+                        for isym in xrange(nsym):
+                            triplet_sym[0]=id_equi[isym,triplet_perm[0]]
+                            triplet_sym[1]=id_equi[isym,triplet_perm[1]]
+                            triplet_sym[2]=id_equi[isym,triplet_perm[2]]
                             for ll in xrange(3):
-                                vec1[ll]=ind_cell[ll,id_equi[isym,triplet_permutation[0]]]
-                                vec2[ll]=ind_cell[ll,id_equi[isym,triplet_permutation[1]]]
-                                vec3[ll]=ind_cell[ll,id_equi[isym,triplet_permutation[2]]]
-                            ispecies1=ind_species[id_equi[isym,triplet_permutation[0]]]
-                            ispecies2=ind_species[id_equi[isym,triplet_permutation[1]]]
-                            ispecies3=ind_species[id_equi[isym,triplet_permutation[2]]]
+                                vec1[ll]=ind_cell[ll,id_equi[isym,triplet_perm[0]]]
+                                vec2[ll]=ind_cell[ll,id_equi[isym,triplet_perm[1]]]
+                                vec3[ll]=ind_cell[ll,id_equi[isym,triplet_perm[2]]]
+                            # Choose a displaced version of triplet_sym chosen so that
+                            # atom 0 is always in the first unit cell.
                             if not vec1[0]==vec1[1]==vec1[2]==0:
                                 for ll in xrange(3):
                                     vec3[ll]=(vec3[ll]-vec1[ll])%ngrid[ll]
                                     vec2[ll]=(vec2[ll]-vec1[ll])%ngrid[ll]
                                     vec1[ll]=0
+                                ispecies1=ind_species[id_equi[isym,triplet_perm[0]]]
+                                ispecies2=ind_species[id_equi[isym,triplet_perm[1]]]
+                                ispecies3=ind_species[id_equi[isym,triplet_perm[2]]]
                                 triplet_sym[0]=_ind2id(vec1,ispecies1,ngrid,natoms)
                                 triplet_sym[1]=_ind2id(vec2,ispecies2,ngrid,natoms)
                                 triplet_sym[2]=_ind2id(vec3,ispecies3,ngrid,natoms)
-                            for ibasisprime in xrange(3):
-                                for jbasisprime in xrange(3):
-                                    for kbasisprime in xrange(3):
-                                        indexijkprime=(ibasisprime*3+jbasisprime)*3+kbasisprime
-                                        for ibasis in xrange(3):
-                                            basis[0]=ibasis
-                                            for jbasis in xrange(3):
-                                                basis[1]=jbasis
-                                                for kbasis in xrange(3):
-                                                    basis[2]=kbasis
-                                                    indexijk=ibasis*9+jbasis*3+kbasis
-                                                    ibasispermut=basis[permutations[ipermutation,0]]
-                                                    jbasispermut=basis[permutations[ipermutation,1]]
-                                                    kbasispermut=basis[permutations[ipermutation,2]]
-                                                    BB[indexijkprime,indexijk]=(
-                                                        orth[ibasisprime,ibasispermut,isym]*
-                                                        orth[jbasisprime,jbasispermut,isym]*
-                                                        orth[kbasisprime,kbasispermut,isym])
-                            if (ipermutation==0 and isym==0) or not (
+                            # If the permutation+symmetry operation changes the triplet into
+                            # an as-yet-unseen image, add it to the list of equivalent triplets
+                            # and fill the transformation array accordingly.
+                            if (iperm==0 and isym==0) or not (
                                     _triplets_are_equal(triplet_sym,triplet) or
                                     _triplet_in_list(triplet_sym,equilist,v_nequi[self.nlist-1])):
                                 v_nequi[self.nlist-1]+=1
@@ -771,19 +795,14 @@ cdef class Wedge:
                                 for iaux in xrange(27):
                                     for jaux in xrange(27):
                                         v_transformation[iaux,jaux,v_nequi[self.nlist-1]-1,
-                                                         self.nlist-1]=BB[iaux,jaux]
+                                                         self.nlist-1]=rot[iperm,isym,iaux,jaux]
+                            # If the permutation+symmetry operation amounts to the identity,
+                            # add a row to the coefficient matrix.
                             if _triplets_are_equal(triplet_sym,triplet):
                                 for indexijkprime in xrange(27):
-                                    nonzero=False
-                                    BB[indexijkprime,indexijkprime]-=1.
-                                    for indexijk in xrange(27):
-                                        if fabs(BB[indexijkprime,indexijk])>1e-12:
-                                            nonzero=True
-                                        else:
-                                            BB[indexijkprime,indexijk]=0.
-                                    if nonzero:
+                                    if nonzero[iperm,isym,indexijkprime]:
                                         for ll in xrange(27):
-                                            coeffi[nnonzero,ll]=BB[indexijkprime,ll]
+                                            coeffi[nnonzero,ll]=rot2[iperm,isym,indexijkprime,ll]
                                         nnonzero+=1
                     coeffi_reduced=np.zeros((max(nnonzero,27),27),dtype=np.double)
                     for iaux in xrange(nnonzero):
