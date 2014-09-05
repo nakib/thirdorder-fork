@@ -67,7 +67,8 @@ def read_POSCAR(directory):
             typeline="".join(fields)
         else:
             nruter["elements"]=line.split()
-            nruter["numbers"]=np.array([int(i) for i in fields])
+            nruter["numbers"]=np.array([int(i) for i in fields],
+                                       dtype=np.intc)
             typeline=f.next()
         natoms=nruter["numbers"].sum()
         nruter["positions"]=np.empty((3,natoms))
@@ -139,7 +140,7 @@ def read_forces(filename):
     nruter=[]
     for i in a.getchildren():
         nruter.append([float(j) for j in i.text.split()])
-    nruter=np.array(nruter)
+    nruter=np.array(nruter,dtype=np.double)
     return nruter
 
 
@@ -195,11 +196,10 @@ if __name__=="__main__":
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
-    print "Calling experimental constructor Wedge()"
+    print "Looking for an irreducible set of third-order IFCs"
     wedge=thirdorder_core.Wedge(poscar,sposcar,symops,dmin,
                                 nequi,shifts,frange)
-    wedgeres=wedge.wedgeres
-    print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
+    print "- {} triplet equivalence classes found".format(wedge.nlist)
     list4=wedge.build_list4()
     nirred=len(list4)
     nruns=4*nirred
@@ -262,7 +262,7 @@ if __name__=="__main__":
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(400.*H*H)
         print "Reconstructing the full array"
-        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar)
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
     print doneblock

@@ -300,12 +300,12 @@ cdef class SymmetryOperations:
       """
       cdef int ntot
       cdef int i,ii,isym,ispecies
-      cdef int[:] ngrid,ind_species,vec
-      cdef int[:,:] ind_cell,v_nruter
+      cdef int[:] ngrid,vec
+      cdef int[:,:] v_nruter
       cdef double dmin
       cdef double[:] car,diffs
       cdef double[:,:] car_sym,positions,latvec,tmp
-      cdef np.ndarray np_icell,np_ispecies,nruter
+      cdef np.ndarray nruter
 
       positions=sposcar["positions"]
       latvec=sposcar["lattvec"]
@@ -313,9 +313,6 @@ cdef class SymmetryOperations:
                      dtype=np.intc)
       ntot=positions.shape[1]
       natoms=ntot//(ngrid[0]*ngrid[1]*ngrid[2])
-      np_icell,np_ispecies=_id2ind(ngrid,natoms)
-      ind_cell=np_icell
-      ind_species=np_ispecies
       nruter=np.empty((self.nsyms,ntot),dtype=np.intc)
       car=np.empty(3)
       v_nruter=nruter
@@ -350,14 +347,14 @@ cdef class SymmetryOperations:
 
 
 @cython.boundscheck(False)
-def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
+def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     """
     Recover the full anharmonic IFC set from the irreducible set of
     force constants and the information contained in a wedge object.
     """
-    cdef bint nonzero
-    cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix
-    cdef int nlist,nnonzero,natoms,ntot,tribasisindex,colindex,nrows,ncols
+    cdef int ii,jj,ll,mm,nn,kk,ss,tt,ix,e0,e1,e2,e3
+    cdef int nlist,nlist4,natoms,ntot
+    cdef int ntotalindependent,tribasisindex,colindex,nrows,ncols
     cdef int[:] naccumindependent
     cdef int[:,:,:] vind1
     cdef int[:,:,:] vind2
@@ -365,35 +362,36 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     cdef double[:] aphilist
     cdef double[:,:] vaa
     cdef double[:,:,:] vphipart
-    cdef double[:,:,:,:] doubletrans
     cdef double[:,:,:,:,:,:] vnruter
 
-    nlist=wedgeres["Nlist"]
+    nlist=wedge.nlist
     natoms=len(poscar["types"])
     ntot=len(sposcar["types"])
     vnruter=np.zeros((3,3,3,natoms,ntot,ntot))
-    naccumindependent=np.insert(np.cumsum(wedgeres["NIndependentBasis"],
-                                                dtype=np.intc),0,[0])
+    naccumindependent=np.insert(np.cumsum(
+        wedge.nindependentbasis[:nlist],dtype=np.intc),0,[0])
     ntotalindependent=naccumindependent[-1]
     vphipart=phipart
-    for ii,e in enumerate(list4):
-        vnruter[e[2],e[3],:,e[0],e[1],:]=vphipart[:,ii,:]
+    nlist4=len(list4)
+    for ii in xrange(nlist4):
+        e0,e1,e2,e3=list4[ii]
+        vnruter[e2,e3,:,e0,e1,:]=vphipart[:,ii,:]
     philist=[]
     for ii in xrange(nlist):
-        for jj in xrange(wedgeres["NIndependentBasis"][ii]):
-            ll=wedgeres["IndependentBasis"][jj,ii]//9
-            mm=(wedgeres["IndependentBasis"][jj,ii]%9)//3
-            nn=wedgeres["IndependentBasis"][jj,ii]%3
+        for jj in xrange(wedge.nindependentbasis[ii]):
+            ll=wedge.independentbasis[jj,ii]//9
+            mm=(wedge.independentbasis[jj,ii]%9)//3
+            nn=wedge.independentbasis[jj,ii]%3
             philist.append(vnruter[ll,mm,nn,
-                                  wedgeres["List"][0,ii],
-                                  wedgeres["List"][1,ii],
-                                  wedgeres["List"][2,ii]])
+                                  wedge.llist[0,ii],
+                                  wedge.llist[1,ii],
+                                  wedge.llist[2,ii]])
     aphilist=np.array(philist)
     vind1=-np.ones((natoms,ntot,ntot),dtype=np.intc)
     vind2=-np.ones((natoms,ntot,ntot),dtype=np.intc)
-    vequilist=wedgeres["ALLEquiList"]
+    vequilist=wedge.allequilist
     for ii in xrange(nlist):
-        for jj in xrange(wedgeres["Nequi"][ii]):
+        for jj in xrange(wedge.nequi[ii]):
             vind1[vequilist[0,jj,ii],
                   vequilist[1,jj,ii],
                   vequilist[2,jj,ii]]=ii
@@ -401,7 +399,7 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
                   vequilist[1,jj,ii],
                   vequilist[2,jj,ii]]=jj
 
-    vtrans=wedgeres["TransformationArray"]
+    vtrans=wedge.transformationarray
 
     nrows=ntotalindependent
     ncols=natoms*ntot*27
@@ -465,16 +463,16 @@ def reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar):
     # Build the final, full set of anharmonic IFCs.
     vnruter[:,:,:,:,:,:]=0.
     for ii in xrange(nlist):
-        for jj in xrange(wedgeres["Nequi"][ii]):
+        for jj in xrange(wedge.nequi[ii]):
             for ll in xrange(3):
                 for mm in xrange(3):
                     for nn in xrange(3):
                         tribasisindex=(ll*3+mm)*3+nn
-                        for ix in xrange(wedgeres["NIndependentBasis"][ii]):
+                        for ix in xrange(wedge.nindependentbasis[ii]):
                             vnruter[ll,mm,nn,vequilist[0,jj,ii],
                                     vequilist[1,jj,ii],
                                     vequilist[2,jj,ii]
-                                    ]+=wedgeres["TransformationArray"][
+                                    ]+=wedge.transformationarray[
                                         tribasisindex,ix,jj,ii]*aphilist[
                                             naccumindependent[ii]+ix]
     return vnruter
@@ -488,7 +486,7 @@ cdef class Wedge:
     matrix from them.
     """
     cdef readonly SymmetryOperations symops
-    cdef readonly dict poscar,sposcar,wedgeres
+    cdef readonly dict poscar,sposcar
     cdef int allocsize,allallocsize,nalllist
     cdef readonly int nlist
     cdef readonly np.ndarray nequi,llist,allequilist
@@ -577,8 +575,7 @@ cdef class Wedge:
         cdef int ngrid1,ngrid2,ngrid3,nsymm,natoms,ntot,summ
         cdef int ii,jj,kk,ll,iaux,jaux
         cdef int ibasis,jbasis,kbasis,ibasisprime,jbasisprime,kbasisprime
-        cdef int ipermutation,iel
-        cdef int indexijk,indexijkprime,indexrow
+        cdef int ipermutation,indexijk,indexijkprime
         cdef int[:] ngrid,ind_species,vec1,vec2,vec3,independent
         cdef int[:] v_nequi,v_nindependentbasis
         cdef int[:] basis,triplet,triplet_permutation,triplet_sym
@@ -588,7 +585,7 @@ cdef class Wedge:
         cdef int[:,:,:] v_allequilist
         cdef double dist,frange2
         cdef double[:] car2,car3
-        cdef double[:,:] latvec,coord,coordall,BB,b,coeffi,coeffi_reduced
+        cdef double[:,:] latvec,coordall,BB,b,coeffi,coeffi_reduced
         cdef double[:,:,:] orth
         cdef double[:,:,:] v_transformationaux
         cdef double[:,:,:,:] v_transformationarray,v_transformation
@@ -607,7 +604,6 @@ cdef class Wedge:
         vec3=np.empty(3,dtype=np.intc)
 
         latvec=self.sposcar["lattvec"]
-        coord=np.dot(latvec,self.poscar["positions"])
         coordall=np.dot(latvec,self.sposcar["positions"])
         orth=np.transpose(self.symops.crotations,(1,2,0))
         car2=np.empty(3,dtype=np.double)
@@ -731,7 +727,6 @@ cdef class Wedge:
                                 for jbasisprime in xrange(3):
                                     for kbasisprime in xrange(3):
                                         indexijkprime=(ibasisprime*3+jbasisprime)*3+kbasisprime
-                                        indexrow=(ipermutation*nsymm+isym)*27+indexijkprime
                                         for ibasis in xrange(3):
                                             basis[0]=ibasis
                                             for jbasis in xrange(3):
@@ -802,29 +797,13 @@ cdef class Wedge:
                         if fabs(v_transformationarray[kk,ll,jj,ii])<1e-12:
                             v_transformationarray[kk,ll,jj,ii]=0.
 
-        coords="xyz"
-        for ii in xrange(self.nlist):
-            print "-".join([str(i) for i in self.llist[:,ii]])
-            for jj in xrange(self.nindependentbasis[ii]):
-                ll=self.independentbasis[jj,ii]//9
-                mm=(self.independentbasis[jj,ii]%9)//3
-                nn=self.independentbasis[jj,ii]%3
-                print "\t","".join([coords[i] for i in [ll,mm,nn]])
-                            
-        self.wedgeres=dict()
-        self.wedgeres["Nlist"]=self.nlist
-        self.wedgeres["Nequi"]=self.nequi
-        self.wedgeres["List"]=self.llist
-        self.wedgeres["NIndependentBasis"]=self.nindependentbasis
-        self.wedgeres["ALLEquiList"]=self.allequilist
-        self.wedgeres["IndependentBasis"]=self.independentbasis
-        self.wedgeres["TransformationArray"]=self.transformationarray
-
     def build_list4(self):
         """
         Build a list of 4-uples from the results of the reduction.
         """
-        ntotalindependent=sum(self.wedgeres["NIndependentBasis"])
+        cdef int ii,jj,ll,mm,nn
+        cdef list list6
+
         list6=[]
         for ii in xrange(self.nlist):
             for jj in xrange(self.nindependentbasis[ii]):
@@ -850,7 +829,7 @@ cdef tuple gaussian(double[:,:] a):
     Specialized version of Gaussian elimination.
     """
     cdef int i,j,k,irow
-    cdef int row,column,ndependent,nindependent
+    cdef int row,col,ndependent,nindependent
     cdef double tmp
     cdef int[:] dependent,independent
 
