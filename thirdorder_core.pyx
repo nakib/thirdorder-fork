@@ -44,7 +44,7 @@ cimport cthirdorder_core
 
 # Maximum matrix size (rows*cols) for the dense method.
 DEF MAXDENSE=33554432
-
+    
 # Permutations of 3 elements listed in the same order as in the old
 # Fortran code.
 cdef int[:,:] permutations=np.array([
@@ -84,15 +84,15 @@ cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
-   """
-   Return True if two triplets are equal and False otherwise.
-   """
-   cdef int i
+    """
+    Return True if two triplets are equal and False otherwise.
+    """
+    cdef int i
 
-   for i in xrange(3):
-       if triplet1[i]!=triplet2[i]:
-           return False
-   return True
+    for i in xrange(3):
+        if triplet1[i]!=triplet2[i]:
+            return False
+    return True
 
 
 @cython.boundscheck(False)
@@ -590,6 +590,7 @@ cdef class Wedge:
         cdef double[:,:,:] v_transformationaux
         cdef double[:,:,:,:] v_transformationarray,v_transformation
 
+        # Preliminary work: memory allocation an initialization.
         frange2=self.frange*self.frange
 
         ngrid1=self.sposcar["na"]
@@ -621,7 +622,7 @@ cdef class Wedge:
         v_independentbasis=self.independentbasis
         v_llist=self.llist
         v_alllist=self.alllist
-
+        
         iaux=0
         shifts27=np.empty((27,3),dtype=np.intc)
         for ii in xrange(-1,2):
@@ -641,8 +642,11 @@ cdef class Wedge:
         BB=np.empty((27,27),dtype=np.double)
         equilist=np.empty((3,nsymm*6),dtype=np.intc)
         coeffi=np.empty((6*nsymm*27,27),dtype=np.double)
+
         id_equi=self.symops.map_supercell(self.sposcar)
         ind_cell,ind_species=_id2ind(ngrid,natoms)
+
+        # Scan all atom triplets (ii,jj,kk) in the supercell.
         for ii in xrange(natoms):
             for jj in xrange(ntot):
                 dist=self.dmin[ii,jj]
@@ -677,12 +681,18 @@ cdef class Wedge:
                                    (car3[2]-car2[2])**2)
                     if d2_min>=frange2:
                         continue
+                    # This point is only reached if there is a choice of periodic images of
+                    # ii, jj and kk such that all pairs ii-jj, ii-kk and jj-kk are within
+                    # the specified interaction range.
                     summ+=1
                     triplet[0]=ii
                     triplet[1]=jj
                     triplet[2]=kk
                     if _triplet_in_list(triplet,v_alllist,self.nalllist):
                         continue
+                    # This point is only reached if the triplet is not
+                    # equivalent to any of the triplets already
+                    # considered.
                     self.nlist+=1
                     if self.nlist==self.allocsize:
                         self._expandlist()
@@ -700,10 +710,13 @@ cdef class Wedge:
                     v_nequi[self.nlist-1]=0
                     coeffi[:,:]=0.
                     nnonzero=0
+                    # Scan the six possible permutations of triplet (ii,jj,kk).
                     for ipermutation in xrange(6):
                         triplet_permutation[0]=triplet[permutations[ipermutation,0]]
                         triplet_permutation[1]=triplet[permutations[ipermutation,1]]
                         triplet_permutation[2]=triplet[permutations[ipermutation,2]]
+                        # Explore the effect of all symmetry
+                        # operations on each of the permuted triplets.
                         for isym in xrange(nsymm):
                             triplet_sym[0]=id_equi[isym,triplet_permutation[0]]
                             triplet_sym[1]=id_equi[isym,triplet_permutation[1]]
