@@ -22,11 +22,15 @@
 import os.path
 import glob
 try:
-    import xml.etree.cElementTree as ElementTree
-    xmllib="cElementTree"
+    from lxml import etree as ElementTree
+    xmllib="lxml.etree"
 except ImportError:
-    import xml.etree.ElementTree as ElementTree
-    xmllib="ElementTree"
+    try:
+        import xml.etree.cElementTree as ElementTree
+        xmllib="cElementTree"
+    except ImportError:
+        import xml.etree.ElementTree as ElementTree
+        xmllib="ElementTree"
 try:
     import cStringIO as StringIO
 except ImportError:

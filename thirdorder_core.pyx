@@ -75,6 +75,9 @@ cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
     Return True if triplet is found in llist[:,:nlist]. The first dimension
     of list must have a length of 3.
     """
+    # This works fine for the nlist ranges we have to deal with, but
+    # using std::vector and std::push_heap would be a better general
+    # solution.
     cdef int i
 
     for i in xrange(nlist):
@@ -595,7 +598,7 @@ cdef class Wedge:
         cdef double[:,:,:,:] rot,rot2
         cdef double[:,:,:,:] v_transformationarray,v_transformation
 
-        # Preliminary work: memory allocation an initialization.
+        # Preliminary work: memory allocation and initialization.
         frange2=self.frange*self.frange
 
         ngrid1=self.sposcar["na"]
