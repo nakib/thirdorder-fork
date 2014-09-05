@@ -355,10 +355,10 @@ def gen_supercell(poscar,na,nb,nc):
     nruter["types"]=[]
     nruter["positions"]=np.empty((3,poscar["positions"].shape[1]*na*nb*nc))
     pos=0
-    for pos,(k,j,i,iat) in enumerate(itertools.product(range(nc),
-                                                       range(nb),
-                                                       range(na),
-                                                       range(
+    for pos,(k,j,i,iat) in enumerate(itertools.product(xrange(nc),
+                                                       xrange(nb),
+                                                       xrange(na),
+                                                       xrange(
                 poscar["positions"].shape[1]))):
         nruter["positions"][:,pos]=(poscar["positions"][:,iat]+[i,j,k])/[
             na,nb,nc]
@@ -447,7 +447,7 @@ if __name__=="__main__":
     print "Analyzing symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
-        poscar["positions"].T)
+        poscar["positions"].T,SYMPREC)
     print "- Symmetry group {} detected".format(symops.symbol)
     print "- {} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
@@ -460,10 +460,11 @@ if __name__=="__main__":
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
-    print "Calling wedge()"
-    wedgeres=thirdorder_core.pywedge(poscar,sposcar,symops,frange)
-    print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
-    list4=build_list4(wedgeres)
+    print "Looking for an irreducible set of third-order IFCs"
+    wedge=thirdorder_core.Wedge(poscar,sposcar,symops,dmin,
+                                nequi,shifts,frange)
+    print "- {} triplet equivalence classes found".format(wedge.nlist)
+    list4=wedge.build_list4()
     nirred=len(list4)
     nruns=4*nirred
     print "- {} DFT runs are needed".format(nruns)
@@ -475,7 +476,7 @@ if __name__=="__main__":
         namepattern="DISP.{}.{{0:0{}d}}".format(sfilename,width)
         print "Writing displaced coordinates to DISP.{}.*".format(sfilename)
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 # Start numbering the files at 1 for aesthetic
@@ -515,14 +516,14 @@ if __name__=="__main__":
         print "Computing an irreducible set of anharmonic force constants"
         phipart=np.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 number=nirred*n+i
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(4000.*H*H)
         print "Reconstructing the full matrix"
-        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar)
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
     print doneblock
