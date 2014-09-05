@@ -808,6 +808,7 @@ cdef class Wedge:
                     for iaux in xrange(nnonzero):
                         for jaux in xrange(27):
                             coeffi_reduced[iaux,jaux]=coeffi[iaux,jaux]
+                    # Obtain a set of independent IFCs for this triplet equivalence class.
                     b,independent=gaussian(coeffi_reduced)
                     for iaux in xrange(27):
                         for jaux in xrange(27):
