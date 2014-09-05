@@ -10,7 +10,6 @@ from distutils.extension import Extension
 INCLUDE_DIRS=[]
 # Add the location of the spglib shared library to this list if necessary.
 # Example: LIBRARY_DIRS=["/home/user/local/lib"]
-# Do not forget to include the directory in your LD_LIBRARY_PATH as well.
 LIBRARY_DIRS=[]
 
 # Set USE_CYTHON to True if you want include the cythonization in your build process.
@@ -22,6 +21,7 @@ extensions=[Extension("thirdorder_core",
                       ["thirdorder_core"+ext],
                       include_dirs=[numpy.get_include()]+INCLUDE_DIRS,
                       library_dirs=LIBRARY_DIRS,
+                      runtime_library_dirs=LIBRARY_DIRS,
                       libraries=["symspg"])]
 
 if USE_CYTHON:
