@@ -19,9 +19,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os.path
 import re
-import glob
 import ast
 
 import thirdorder_core
@@ -31,14 +29,15 @@ from thirdorder_common import *
 BOHR_RADIUS=5.2917721092e-2 # nm
 RYDBERG=13.60569253 # eV
 
+
 def qe_cell(ibrav,celldm):
     """
     Return a set of lattice vectors according to Quantum Espresso's
     convention. ibrav=0 is not supported by this function.
     """
-    nruter=numpy.zeros((3,3))
+    nruter=np.zeros((3,3))
     if ibrav==1:
-        nruter=numpy.eye(3)
+        nruter=np.eye(3)
     elif ibrav==2:
         nruter[0,0]=-0.5
         nruter[0,1]= 0.0
@@ -64,21 +63,21 @@ def qe_cell(ibrav,celldm):
         nruter[0,1]= 0.0
         nruter[0,2]= 0.0
         nruter[1,0]=-0.5
-        nruter[1,1]= numpy.sqrt(3.)/2.
+        nruter[1,1]= np.sqrt(3.)/2.
         nruter[1,2]= 0.
         nruter[2,0]= 0.
         nruter[2,1]= 0.
         nruter[2,2]= celldm[3]
     elif ibrav==5:
-        nruter[0,0]= numpy.sqrt((1-celldm[4])/2.)
-        nruter[0,1]=-numpy.sqrt((1-celldm[4])/6.)
-        nruter[0,2]= numpy.sqrt((1+2*celldm[4])/3.)
+        nruter[0,0]= np.sqrt((1-celldm[4])/2.)
+        nruter[0,1]=-np.sqrt((1-celldm[4])/6.)
+        nruter[0,2]= np.sqrt((1+2*celldm[4])/3.)
         nruter[1,0]= 0.
-        nruter[1,1]= 2.*numpy.sqrt((1-celldm[4])/6.)
-        nruter[1,2]= numpy.sqrt((1+2*celldm[4])/3.)
-        nruter[2,0]=-numpy.sqrt((1-celldm[4])/2.)
-        nruter[2,1]=-numpy.sqrt((1-celldm[4])/6.)
-        nruter[2,2]= numpy.sqrt((1+2*celldm[4])/3.)
+        nruter[1,1]= 2.*np.sqrt((1-celldm[4])/6.)
+        nruter[1,2]= np.sqrt((1+2*celldm[4])/3.)
+        nruter[2,0]=-np.sqrt((1-celldm[4])/2.)
+        nruter[2,1]=-np.sqrt((1-celldm[4])/6.)
+        nruter[2,2]= np.sqrt((1+2*celldm[4])/3.)
     elif ibrav==6:
         nruter[0,0]= 1.0
         nruter[0,1]= 0.0
@@ -144,7 +143,7 @@ def qe_cell(ibrav,celldm):
         nruter[0,1]= 0.0
         nruter[0,2]= 0.0
         nruter[1,0]= celldm[2]*celldm[4]
-        nruter[1,1]= celldm[2]*numpy.sqrt(1-celldm[4]**2)
+        nruter[1,1]= celldm[2]*np.sqrt(1-celldm[4]**2)
         nruter[1,2]= 0.
         nruter[2,0]= 0.
         nruter[2,1]= 0.
@@ -154,7 +153,7 @@ def qe_cell(ibrav,celldm):
         nruter[0,1]= 0.0
         nruter[0,2]=-celldm[3]/2.
         nruter[1,0]= celldm[2]*celldm[4]
-        nruter[1,1]= celldm[2]*numpy.sqrt(1-celldm[4]**2)
+        nruter[1,1]= celldm[2]*np.sqrt(1-celldm[4]**2)
         nruter[1,2]= 0.
         nruter[2,0]= 0.5
         nruter[2,1]= 0.
@@ -164,21 +163,22 @@ def qe_cell(ibrav,celldm):
         nruter[0,1]= 0.0
         nruter[0,2]= 0.0
         nruter[1,0]= celldm[2]*celldm[6]
-        nruter[1,1]= celldm[2]*numpy.sin(
-            numpy.arccos(celldm[6]))
+        nruter[1,1]= celldm[2]*np.sin(
+            np.arccos(celldm[6]))
         nruter[1,2]= 0.
         nruter[2,0]= celldm[3]*celldm[5]
         nruter[2,1]= celldm[3]*(celldm[4]-
-                                celldm[5]*celldm[6])/numpy.sin(
-                                    numpy.arccos(celldm[6]))
-        nruter[2,2]= celldm[3]*numpy.sqrt(1+
+                                celldm[5]*celldm[6])/np.sin(
+                                    np.arccos(celldm[6]))
+        nruter[2,2]= celldm[3]*np.sqrt(1+
                                           2*celldm[4]*celldm[5]*celldm[6]-
                                           celldm[4]**2-celldm[5]**2-
-                                          celldm[6]**2)/numpy.sin(
-                                              numpy.arccos(celldm[6]))
+                                          celldm[6]**2)/np.sin(
+                                              np.arccos(celldm[6]))
     else:
         raise ValueError("unknown ibrav")
     return nruter
+
 
 def eval_qe_algebraic(expression):
     """
@@ -258,10 +258,10 @@ def read_qe_in(filename):
         celldm[1]*=BOHR_RADIUS
     if ibrav == 0:
         # CELL_PARAMETERS are read in below after ATOMIC_POSITIONS
-        nruter["lattvec"]=numpy.empty((3,3))
+        nruter["lattvec"]=np.empty((3,3))
     else:
         nruter["lattvec"]=qe_cell(ibrav,celldm).T*celldm[1]
-    nruter["positions"]=numpy.empty((3,natoms))
+    nruter["positions"]=np.empty((3,natoms))
     nruter["elements"]=[]
     lines=contents.split("\n")
     # Read ATOMIC_POSITIONS
@@ -328,8 +328,8 @@ def read_qe_in(filename):
     elif poskind=="angstrom":
         nruter["positions"]*=.1
     if poskind!="crystal":
-        nruter["positions"]=scipy.linalg.solve(nruter["lattvec"],
-                                               nruter["positions"])
+        nruter["positions"]=sp.linalg.solve(nruter["lattvec"],
+                                            nruter["positions"])
     aux=collections.OrderedDict()
     for e in nruter["elements"]:
         aux[e]=None
@@ -347,18 +347,18 @@ def gen_supercell(poscar,na,nb,nc):
     nruter["na"]=na
     nruter["nb"]=nb
     nruter["nc"]=nc
-    nruter["lattvec"]=numpy.array(poscar["lattvec"])
+    nruter["lattvec"]=np.array(poscar["lattvec"])
     nruter["lattvec"][:,0]*=na
     nruter["lattvec"][:,1]*=nb
     nruter["lattvec"][:,2]*=nc
     nruter["elements"]=[]
     nruter["types"]=[]
-    nruter["positions"]=numpy.empty((3,poscar["positions"].shape[1]*na*nb*nc))
+    nruter["positions"]=np.empty((3,poscar["positions"].shape[1]*na*nb*nc))
     pos=0
-    for pos,(k,j,i,iat) in enumerate(itertools.product(range(nc),
-                                                       range(nb),
-                                                       range(na),
-                                                       range(
+    for pos,(k,j,i,iat) in enumerate(itertools.product(xrange(nc),
+                                                       xrange(nb),
+                                                       xrange(na),
+                                                       xrange(
                 poscar["positions"].shape[1]))):
         nruter["positions"][:,pos]=(poscar["positions"][:,iat]+[i,j,k])/[
             na,nb,nc]
@@ -400,7 +400,7 @@ def read_forces(filename):
             fields=l.split()
             if len(fields)==9 and fields[0]=="atom" and fields[4]=="force":
                 nruter.append([float(i) for i in fields[6:]])
-    nruter=numpy.array(nruter)*RYDBERG/BOHR_RADIUS
+    nruter=np.array(nruter)*RYDBERG/BOHR_RADIUS
     return nruter
 
 
@@ -447,7 +447,7 @@ if __name__=="__main__":
     print "Analyzing symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
-        poscar["positions"].T)
+        poscar["positions"].T,SYMPREC)
     print "- Symmetry group {} detected".format(symops.symbol)
     print "- {} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
@@ -460,22 +460,27 @@ if __name__=="__main__":
         print "- Automatic cutoff: {} nm".format(frange)
     else:
         print "- User-defined cutoff: {} nm".format(frange)
-    print "Calling wedge()"
-    wedgeres=thirdorder_core.pywedge(poscar,sposcar,symops,frange)
-    print "- {} triplet equivalence classes found".format(wedgeres["Nlist"])
-    list4=build_list4(wedgeres)
+    print "Looking for an irreducible set of third-order IFCs"
+    wedge=thirdorder_core.Wedge(poscar,sposcar,symops,dmin,
+                                nequi,shifts,frange)
+    print "- {} triplet equivalence classes found".format(wedge.nlist)
+    list4=wedge.build_list4()
     nirred=len(list4)
     nruns=4*nirred
     print "- {} DFT runs are needed".format(nruns)
     if action=="sow":
         print sowblock
-        print "Writing undisplaced coordinates to BASE.{}".format(sfilename)
-        write_supercell(sfilename,sposcar,"BASE.{}".format(sfilename))
+        print "Writing undisplaced coordinates to BASE.{}".format(
+            os.path.basename(sfilename))
+        write_supercell(sfilename,sposcar,"BASE.{}".format(
+                os.path.basename(sfilename)))
         width=len(str(4*(len(list4)+1)))
-        namepattern="DISP.{}.{{0:0{}d}}".format(sfilename,width)
-        print "Writing displaced coordinates to DISP.{}.*".format(sfilename)
+        namepattern="DISP.{}.{{0:0{}d}}".format(os.path.basename(sfilename),
+                                                width)
+        print "Writing displaced coordinates to DISP.{}.*".format(
+            os.path.basename(sfilename))
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 # Start numbering the files at 1 for aesthetic
@@ -513,16 +518,16 @@ if __name__=="__main__":
             print "- \t Average residual force:"
             print "- \t {} eV/(nm * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
-        phipart=numpy.zeros((3,nirred,ntot))
+        phipart=np.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):
-            for n in range(4):
+            for n in xrange(4):
                 isign=(-1)**(n//2)
                 jsign=-(-1)**(n%2)
                 number=nirred*n+i
                 phipart[:,i,:]-=isign*jsign*forces[number].T
         phipart/=(4000.*H*H)
         print "Reconstructing the full matrix"
-        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedgeres,list4,poscar,sposcar)
+        phifull=thirdorder_core.reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar)
         print "Writing the constants to FORCE_CONSTANTS_3RD"
         write_ifcs(phifull,poscar,sposcar,dmin,nequi,shifts,frange,"FORCE_CONSTANTS_3RD")
     print doneblock

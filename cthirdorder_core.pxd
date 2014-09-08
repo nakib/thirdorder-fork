@@ -18,7 +18,7 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # This file contains declarations needed by the Cython wrapper around
-# spglib and thirdorder_fortran.f90.
+# spglib.
 
 # Prototype declarations for the small part of spglib wrapped here.
 # A single function is enough to get all the symmetry information.
@@ -42,17 +42,3 @@ cdef extern from "spglib/spglib.h":
                                  int num_atom,
                                  double symprec)
   void spg_free_dataset(SpglibDataset *dataset)
-
-# Prototype declarations for some of the Fortran subroutines in
-# thirdorder_fortran.f90.
-# Each Fortran type is translated to its C equivalent.
-cdef extern void wedge(double LatVec[3][3],double InvLatVec[3][3],
-                       double Coord[][3],double CoordAll[][3],
-                       double Orth[][3][3],double Trans[][3],int Natoms,
-                       int *Nlist,void **cNequi,void **cList,void **cALLEquiList,
-                       void **cTransformationArray,void **cNIndependentBasis,
-                       void **cIndependentBasis,int Ngrid1,int Ngrid2,int Ngrid3,
-                       int Nsymm,double ForceRange,int *Allocsize)
-cdef extern void free_wedge(int Allocsize,int Nsymm,void *Nequi,void *List,
-                            void *ALLEquiList,void *TransformationArray,
-                            void  *NIndependentBasis,void *IndependentBasis)

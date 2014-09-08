@@ -1,7 +1,0 @@
-export FC=gfortran
-export FFLAGS=-g -O2 -fPIC  -fbounds-check -march=native
-export CFLAGS=-march=native -I/home/user/local/include
-export LDFLAGS=-L/home/mingo/REPOSITORY/local/lib -lgfortran
-
-
-

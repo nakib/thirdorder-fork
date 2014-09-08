@@ -1,8 +1,6 @@
-arch.make
 *.pyc
 *.pyo
 *.so
 *.o
 *.mod
-*.c
-core/build
+build
