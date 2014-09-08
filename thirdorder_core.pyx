@@ -133,7 +133,7 @@ cdef class SymmetryOperations:
   Object that contains all the interesting information about the
   crystal symmetry group of a set of atoms.
   """
-  cdef double[:,:] __lattvectors
+  cdef double[:,:] __lattvec
   cdef int[:] __types
   cdef double[:,:] __positions
   cdef readonly str symbol
@@ -143,7 +143,7 @@ cdef class SymmetryOperations:
   cdef double[:,:,:] __crotations
   cdef double[:,:] __translations
   cdef double[:,:] __ctranslations
-  cdef double c_lattvectors[3][3]
+  cdef double c_lattvec[3][3]
   cdef int *c_types
   cdef double (*c_positions)[3]
   cdef readonly int natoms,nsyms
@@ -151,10 +151,10 @@ cdef class SymmetryOperations:
 
   property lattice_vectors:
       def __get__(self):
-          return np.asarray(self.__lattvectors)
+          return np.asarray(self.__lattvec)
   property types:
       def __get__(self):
-          return np.asarray(self.__lattvectors)
+          return np.asarray(self.__lattvec)
   property positions:
       def __get__(self):
           return np.asarray(self.__positions)
@@ -189,13 +189,13 @@ cdef class SymmetryOperations:
 
   cdef void __refresh_c_arrays(self):
       """
-      Copy the values of __types, __positions and __lattvectors to
+      Copy the values of __types, __positions and __lattvec to
       their C counterparts.
       """
       cdef int i,j
       for i in xrange(3):
           for j in xrange(3):
-              self.c_lattvectors[i][j]=self.__lattvectors[i,j]
+              self.c_lattvec[i][j]=self.__lattvec[i,j]
       for i in xrange(self.natoms):
           self.c_types[i]=self.__types[i]
           for j in xrange(3):
@@ -209,10 +209,10 @@ cdef class SymmetryOperations:
       """
       cdef int i,j,k
       cdef double[:] tmp1d
-      cdef double[:,:] lat,tmp2d
+      cdef double[:,:] tmp2d
       cdef double[:,:,:] rot
       cdef cthirdorder_core.SpglibDataset *data
-      data=cthirdorder_core.spg_get_dataset(self.c_lattvectors,
+      data=cthirdorder_core.spg_get_dataset(self.c_lattvec,
                                             self.c_positions,
                                             self.c_types,
                                             self.natoms,
@@ -238,27 +238,27 @@ cdef class SymmetryOperations:
               self.__translations[i,j]=data.translations[i][j]
               for k in xrange(3):
                   self.__rotations[i,j,k]=data.rotations[i][j][k]
-      lat=np.transpose(self.__lattvectors)
       rot=np.transpose(self.__rotations,(0,2,1))
       self.__crotations=np.empty_like(self.__rotations)
       self.__ctranslations=np.empty_like(self.__translations)
       for i in xrange(self.nsyms):
-          tmp2d=np.dot(sp.linalg.solve(lat,rot[i,:,:]),lat)
+          tmp2d=np.dot(sp.linalg.solve(self.__lattvec,rot[i,:,:]),
+                       self.__lattvec)
           self.__crotations[i,:,:]=tmp2d.T
-          tmp1d=np.dot(lat,self.__translations[i,:])
+          tmp1d=np.dot(self.__lattvec,self.__translations[i,:])
           self.__ctranslations[i,:]=tmp1d
       cthirdorder_core.spg_free_dataset(data)
 
-  def __cinit__(self,lattvectors,types,positions,symprec=1e-5):
+  def __cinit__(self,lattvec,types,positions,symprec=1e-5):
       cdef int i
-      self.__lattvectors=np.array(lattvectors,dtype=np.double)
+      self.__lattvec=np.array(lattvec,dtype=np.double)
       self.__types=np.array(types,dtype=np.intc)
       self.__positions=np.array(positions,dtype=np.double)
       self.natoms=self.positions.shape[0]
       self.symprec=symprec
       if self.__positions.shape[0]!=self.natoms or self.__positions.shape[1]!=3:
           raise ValueError("positions must be a natoms x 3 array")
-      if not (self.__lattvectors.shape[0]==self.__lattvectors.shape[1]==3):
+      if not (self.__lattvec.shape[0]==self.__lattvec.shape[1]==3):
           raise ValueError("lattice vectors must form a 3 x 3 matrix")
       self.__build_c_arrays()
       self.__refresh_c_arrays()
@@ -296,51 +296,55 @@ cdef class SymmetryOperations:
       the unit cell used to create the object.
       """
       cdef int ntot
-      cdef int i,ii,isym,ispecies
+      cdef int i,ii,ll,isym
       cdef int[:] ngrid,vec
       cdef int[:,:] v_nruter
-      cdef double dmin
-      cdef double[:] car,diffs
-      cdef double[:,:] car_sym,positions,slattvec
-      cdef np.ndarray tmp
+      cdef double diff
+      cdef double[:] car,tmp
+      cdef double[:,:] car_sym,positions,lattvec,motif
       cdef np.ndarray nruter
+      cdef tuple factorization
 
       positions=sposcar["positions"]
-      slattvec=sposcar["lattvec"]
+      lattvec=sposcar["lattvec"]
       ngrid=np.array([sposcar["na"],sposcar["nb"],sposcar["nc"]],
                      dtype=np.intc)
       ntot=positions.shape[1]
       natoms=ntot//(ngrid[0]*ngrid[1]*ngrid[2])
+      motif=np.empty((3,natoms),dtype=np.double)
+      for i in xrange(natoms):
+          for ii in xrange(3):
+              motif[ii,i]=(self.__positions[i,0]*self.__lattvec[ii,0]+
+                           self.__positions[i,1]*self.__lattvec[ii,1]+
+                           self.__positions[i,2]*self.__lattvec[ii,2])
       nruter=np.empty((self.nsyms,ntot),dtype=np.intc)
       car=np.empty(3,dtype=np.double)
+      car_test=np.empty(3,dtype=np.double)
+      tmp=np.empty(3,dtype=np.double)
       v_nruter=nruter
       vec=np.empty(3,dtype=np.intc)
-      diffs=np.zeros(natoms,dtype=np.double)
+      factorization=sp.linalg.lu_factor(self.__lattvec)
       for i in xrange(ntot):
           for ii in xrange(3):
-              car[ii]=(positions[0,i]*slattvec[ii,0]+
-                       positions[1,i]*slattvec[ii,1]+
-                       positions[2,i]*slattvec[ii,2])
+              car[ii]=(positions[0,i]*lattvec[ii,0]+
+                       positions[1,i]*lattvec[ii,1]+
+                       positions[2,i]*lattvec[ii,2])
           car_sym=self.__apply_all(car)
-          tmp=np.remainder(sp.linalg.solve(slattvec,car_sym),1.)
-          for ii in xrange(3):
-              for isym in xrange(self.nsyms):
-                  tmp[ii,isym]*=ngrid[ii]
           for isym in xrange(self.nsyms):
-              for ii in xrange(3):
-                  vec[ii]=int(floor(tmp[ii,isym]))%ngrid[ii]
-                  tmp[ii,isym]-=vec[ii]
               for ii in xrange(natoms):
-                  diffs[ii]=(fabs(tmp[0,isym]-self.__positions[ii,0])+
-                             fabs(tmp[1,isym]-self.__positions[ii,1])+
-                             fabs(tmp[2,isym]-self.__positions[ii,2]))
-              ispecies=0
-              dmin=diffs[0]
-              for ii in xrange(1,natoms):
-                  if diffs[ii]<dmin:
-                      ispecies=ii
-                      dmin=diffs[ii]
-              v_nruter[isym,i]=_ind2id(vec,ispecies,ngrid,natoms)
+                  for ll in xrange(3):
+                      tmp[ll]=car_sym[ll,isym]-motif[ll,ii]
+                  tmp=sp.linalg.lu_solve(factorization,tmp)
+                  for ll in xrange(3):
+                      vec[ll]=int(round(tmp[ll]))
+                  diff=(fabs(vec[0]-tmp[0])+
+                        fabs(vec[1]-tmp[1])+
+                        fabs(vec[2]-tmp[2]))
+                  for ll in xrange(3):
+                      vec[ll]=vec[ll]%ngrid[ll]
+                  if diff<1e-4:
+                      v_nruter[isym,i]=_ind2id(vec,ii,ngrid,natoms)
+                      break
       return nruter
 
 
