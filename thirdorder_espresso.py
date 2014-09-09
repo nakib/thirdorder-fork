@@ -191,7 +191,7 @@ def eval_qe_algebraic(expression):
     validchars="0123456789.eEdD+-*/^()"
     for i in expression:
         if i not in validchars:
-            raise ValueError("invalid character \"{}\" in algebraic expression"
+            raise ValueError("invalid character \"{0}\" in algebraic expression"
                              .format(i))
     if expression[0]=="+":
         raise ValueError("expression starts with +")
@@ -276,18 +276,17 @@ def read_qe_in(filename):
             if read==natoms:
                 break
         if l.startswith("ATOMIC_POSITIONS"):
-            print 
             try:
                 poskind=kindre.search(l).group("kind")
             except AttributeError:
                 raise ValueError("Type of ATOMIC_POSITIONS missing")
             if poskind not in ("alat","bohr","angstrom","crystal"):
-                raise ValueError("cannot interpret coordinates in \"{}\" format"
+                raise ValueError("cannot interpret coordinates in \"{0}\" format"
                                  .format(poskind))
             reading=True
     # Sanity check
     if read < natoms:
-      raise ValueError("Proper ATOMIC_POSITIONS not found (expected: {}; found: {})"
+      raise ValueError("Proper ATOMIC_POSITIONS not found (expected: {0}; found: {1})"
                        .format(natoms, read))
     # Read CELL_PARAMETERS if ibrav == 0
     reading=False
@@ -313,7 +312,7 @@ def read_qe_in(filename):
                 except AttributeError:
                     raise ValueError("Type of CELL_PARAMETERS missing")
                 if latkind not in ("alat","bohr","angstrom"):
-                    raise ValueError("cannot interpret cell parameters in \"{}\" format"
+                    raise ValueError("cannot interpret cell parameters in \"{0}\" format"
                                      .format(latkind))
                 if latkind == "alat" and len(celldm) == 0:
                     raise ValueError("CELL_PARAMETERS alat requires celldm(1)")
@@ -375,7 +374,7 @@ def write_supercell(templatefile,poscar,filename):
     text=open(templatefile,"r").read()
     for i in ("##CELL##","##NATOMS##","##COORDINATES##"):
         if i not in text:
-            raise ValueError("the template does not contain a {} tag".format(i))
+            raise ValueError("the template does not contain a {0} tag".format(i))
     text=text.replace("##NATOMS##",str(len(poscar["types"])))
     celltext="CELL_PARAMETERS angstrom\n"+"\n".join([
             " ".join(["{0:>20.15g}".format(10.*i) for i in j]) for j in poscar["lattvec"].T.tolist()
@@ -441,15 +440,15 @@ if __name__=="__main__":
             sys.exit("Error: invalid cutoff")
         if frange==0.:
             sys.exit("Error: invalid cutoff")
-    print "Reading {}".format(ufilename)
+    print "Reading {0}".format(ufilename)
     poscar=read_qe_in(ufilename)
     natoms=len(poscar["types"])
     print "Analyzing symmetries"
     symops=thirdorder_core.SymmetryOperations(
         poscar["lattvec"],poscar["types"],
         poscar["positions"].T,SYMPREC)
-    print "- Symmetry group {} detected".format(symops.symbol)
-    print "- {} symmetry operations".format(symops.translations.shape[0])
+    print "- Symmetry group {0} detected".format(symops.symbol)
+    print "- {0} symmetry operations".format(symops.translations.shape[0])
     print "Creating the supercell"
     sposcar=gen_supercell(poscar,na,nb,nc)
     ntot=natoms*na*nb*nc
@@ -457,27 +456,27 @@ if __name__=="__main__":
     dmin,nequi,shifts=calc_dists(sposcar)
     if nneigh!=None:
         frange=calc_frange(poscar,sposcar,nneigh,dmin)
-        print "- Automatic cutoff: {} nm".format(frange)
+        print "- Automatic cutoff: {0} nm".format(frange)
     else:
-        print "- User-defined cutoff: {} nm".format(frange)
+        print "- User-defined cutoff: {0} nm".format(frange)
     print "Looking for an irreducible set of third-order IFCs"
     wedge=thirdorder_core.Wedge(poscar,sposcar,symops,dmin,
                                 nequi,shifts,frange)
-    print "- {} triplet equivalence classes found".format(wedge.nlist)
+    print "- {0} triplet equivalence classes found".format(wedge.nlist)
     list4=wedge.build_list4()
     nirred=len(list4)
     nruns=4*nirred
-    print "- {} DFT runs are needed".format(nruns)
+    print "- {0} DFT runs are needed".format(nruns)
     if action=="sow":
         print sowblock
-        print "Writing undisplaced coordinates to BASE.{}".format(
+        print "Writing undisplaced coordinates to BASE.{0}".format(
             os.path.basename(sfilename))
-        write_supercell(sfilename,sposcar,"BASE.{}".format(
+        write_supercell(sfilename,sposcar,"BASE.{0}".format(
                 os.path.basename(sfilename)))
         width=len(str(4*(len(list4)+1)))
-        namepattern="DISP.{}.{{0:0{}d}}".format(os.path.basename(sfilename),
+        namepattern="DISP.{0}.{{0:0{1}d}}".format(os.path.basename(sfilename),
                                                 width)
-        print "Writing displaced coordinates to DISP.{}.*".format(
+        print "Writing displaced coordinates to DISP.{0}.*".format(
             os.path.basename(sfilename))
         for i,e in enumerate(list4):
             for n in xrange(4):
@@ -501,22 +500,22 @@ if __name__=="__main__":
                 continue
             filelist.append(s)
         nfiles=len(filelist)
-        print "- {} filenames read".format(nfiles)
+        print "- {0} filenames read".format(nfiles)
         if nfiles!=nruns:
-            sys.exit("Error: {} filenames were expected".
+            sys.exit("Error: {0} filenames were expected".
                      format(nruns))
         for i in filelist:
             if not os.path.isfile(i):
-                sys.exit("Error: {} is not a regular file".
+                sys.exit("Error: {0} is not a regular file".
                          format(i))
         print "Reading the forces"
         forces=[]
         for i in filelist:
             forces.append(read_forces(i))
-            print "- {} read successfully".format(i)
+            print "- {0} read successfully".format(i)
             res=forces[-1].mean(axis=0)
             print "- \t Average residual force:"
-            print "- \t {} eV/(nm * atom)".format(res)
+            print "- \t {0} eV/(nm * atom)".format(res)
         print "Computing an irreducible set of anharmonic force constants"
         phipart=np.zeros((3,nirred,ntot))
         for i,e in enumerate(list4):

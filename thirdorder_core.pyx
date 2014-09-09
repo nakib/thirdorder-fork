@@ -28,11 +28,8 @@ import sys
 from libc.stdlib cimport malloc,free
 from libc.math cimport floor,fabs
 
-import heapq
-
 import sys
 import copy
-import collections
 
 import numpy as np
 import scipy as sp
@@ -250,7 +247,6 @@ cdef class SymmetryOperations:
       cthirdorder_core.spg_free_dataset(data)
 
   def __cinit__(self,lattvec,types,positions,symprec=1e-5):
-      cdef int i
       self.__lattvec=np.array(lattvec,dtype=np.double)
       self.__types=np.array(types,dtype=np.intc)
       self.__positions=np.array(positions,dtype=np.double)
@@ -319,7 +315,6 @@ cdef class SymmetryOperations:
                            self.__positions[i,2]*self.__lattvec[ii,2])
       nruter=np.empty((self.nsyms,ntot),dtype=np.intc)
       car=np.empty(3,dtype=np.double)
-      car_test=np.empty(3,dtype=np.double)
       tmp=np.empty(3,dtype=np.double)
       v_nruter=nruter
       vec=np.empty(3,dtype=np.intc)
@@ -587,7 +582,7 @@ cdef class Wedge:
         cdef int[:,:,:] nonzero
         cdef int[:,:,:] v_allequilist
         cdef double dist,frange2
-        cdef double[:] car2,car3,tmp
+        cdef double[:] car2,car3
         cdef double[:,:] lattvec,coordall,b,coeffi,coeffi_reduced
         cdef double[:,:,:] orth
         cdef double[:,:,:] v_transformationaux
@@ -845,11 +840,12 @@ cdef class Wedge:
                 list6.append((ll,self.llist[0,ii],
                         mm,self.llist[1,ii],
                         nn,self.llist[2,ii]))
-        aux=collections.OrderedDict()
+        nruter=[]
         for i in list6:
             fournumbers=(i[1],i[3],i[0],i[2])
-            aux[fournumbers]=None
-        return aux.keys()
+            if fournumbers not in nruter:
+                nruter.append(fournumbers)
+        return nruter
 
 
 DEF EPS=1e-10
