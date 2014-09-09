@@ -829,7 +829,7 @@ cdef class Wedge:
         Build a list of 4-uples from the results of the reduction.
         """
         cdef int ii,jj,ll,mm,nn
-        cdef list list6
+        cdef list list6,nruter
 
         list6=[]
         for ii in xrange(self.nlist):
