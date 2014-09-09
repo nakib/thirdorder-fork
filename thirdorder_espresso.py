@@ -329,10 +329,10 @@ def read_qe_in(filename):
     if poskind!="crystal":
         nruter["positions"]=sp.linalg.solve(nruter["lattvec"],
                                             nruter["positions"])
-    aux=collections.OrderedDict()
+    aux=[]
     for e in nruter["elements"]:
-        aux[e]=None
-    aux=aux.keys()
+        if e not in aux:
+            aux.append(e)
     nruter["types"]=[aux.index(i) for i in nruter["elements"]]
     return nruter
 

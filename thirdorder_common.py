@@ -25,7 +25,6 @@ import os.path
 import copy
 import itertools
 import contextlib
-import collections
 try:
     import cStringIO as StringIO
 except ImportError:
