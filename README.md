@@ -26,7 +26,7 @@ After a successful compilation, the directory will contain the compiled module t
 
 Any invocation of thirdorder_vasp.py requires a POSCAR file with a description of the unit cell to be present in the current directory. The script uses no other configuration files, and takes exactly five mandatory command-line arguments:
 
-```
+```bash
 thirdorder_vasp.py sow|reap na nb nc cutoff[nm/-integer]
 ```
 
@@ -49,7 +49,7 @@ Direct
 
 Let us assume that such POSCAR is in the current directory and that thirdorder_vasp.py is in our PATH. To generate an irreducible set of displacements for a 4x4x4 supercell and up-to-third-neighbor interactions, we run
 
-```
+```bash
 thirdorder_vasp.py sow 4 4 4 -3
 ```
 
@@ -69,7 +69,7 @@ done
 
 Some time later, after all these jobs have finished successfully, we only need to feed all the vasprun.xml files in the right order to thirdorder_vasp.py, this time in reap mode:
 
-```
+```bash
 find job* -name vasprun.xml|sort -n|thirdorder_vasp.py reap 4 4 4 -3
 ```
 
@@ -136,7 +136,7 @@ The following supercell template GaAs_sc.in is used for creating the supercell i
 /
 &SYSTEM
   ibrav=0,
-  nat=##NATOMS##,
+  nat=\#\#NATOMS\#\#,
   ntyp=2,
   ecutwfc=48
   ecutrho=384
@@ -147,30 +147,31 @@ The following supercell template GaAs_sc.in is used for creating the supercell i
 ATOMIC_SPECIES
  As  74.92160  As.pbe-dn-kjpaw_psl.1.0.0.UPF
  Ga  69.723    Ga.pbe-dnl-kjpaw_psl.1.0.0.UPF
-##COORDINATES##
+\#\#COORDINATES\#\#
 K_POINTS gamma
-##CELL##
-
+\#\#CELL\#\#
 ```
 
 Please note that if Gamma-point k-sampling is used for the supercells, it is computationally much more efficient to apply "K_POINTS gamma" instead of "K_POINTS automatic" with the mesh set to "1 1 1 0 0 0". SCF convergence criterion conv_thr should be set to a tight value and parameters tstress and tprnfor are required so that thirdorder can extract the forces from the output file.
 
 Thirdorder uses no other configuration files, and requires seven mandatory command-line arguments to create the supercell inputs with the "sow" operation:
 
-```
+```bash
 thirdorder_espresso.py unitcell.in sow na nb nc cutoff[nm/-integer] supercell_template.in
 ```
 
 Please see the above description for VASP for the explanation of the parameters na, nb, nc, and cutoff. For the present GaAs example, we execute:
 
-```
+```bash
 thirdorder_espresso.py GaAs.in sow 4 4 4 -3 GaAs_sc.in
 ```
+
 The command creates a file called BASE.GaAs_sc.in with the undisplaced supercell coordinates and 144 files with names following the pattern DISP.GaAs_sc.in.NNN The DISP files should be executed with QE. This step is completely system-dependent, but some practical suggestions can be extracted from the VASP example above.
 
 After all the jobs have finished successfully, we only need to feed all the output files in the right order to thirdorder_espresso.py, this time in reap mode (now using only six arguments, the supercell argument is not used here):
 
-```
+```bash
 find . -name 'DISP.GaAs_sc.in*out' | sort -n | thirdorder_espresso.py GaAs.in reap 4 4 4 -3
 ```
+
 If everything goes according to plan, a FORCE_CONSTANTS_3RD file will be created at the end of this run. Naturally, it is important to choose the same parameters for the sow and reap steps.
