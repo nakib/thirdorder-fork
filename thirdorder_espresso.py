@@ -385,6 +385,7 @@ def write_supercell(templatefile,poscar,filename):
                                                                                 poscar["positions"].T.tolist())
             ])
     text=text.replace("##COORDINATES##",coordtext)
+    text=text.replace("##NUMBER##",str(number))
     open(filename,"w").write(text)
 
 

@@ -133,6 +133,7 @@ The following supercell template GaAs_sc.in is used for creating the supercell i
   prefix='gaas',
   tstress = .true.,
   tprnfor = .true.,
+  outdir = 'tmp_\#\#NUMBER\#\#'
 /
 &SYSTEM
   ibrav=0,
