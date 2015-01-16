@@ -58,8 +58,8 @@ cdef int[:,:] permutations=np.array([
     [2,0,1]],dtype=np.intc)
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 cdef inline int _ind2id(int[:] icell,int ispecies,int[:] ngrid,int nspecies):
     """
     Merge a set of cell+atom indices into a single index into a supercell.
@@ -67,8 +67,8 @@ cdef inline int _ind2id(int[:] icell,int ispecies,int[:] ngrid,int nspecies):
     return (icell[0]+(icell[1]+icell[2]*ngrid[1])*ngrid[0])*nspecies+ispecies
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
     """
     Return True if triplet is found in llist[:,:nlist]. The first dimension
@@ -86,8 +86,8 @@ cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
     return False
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
     """
     Return True if two triplets are equal and False otherwise.
@@ -100,8 +100,8 @@ cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
     return True
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
 cdef tuple _id2ind(int[:] ngrid,int nspecies):
     """
     Create a map from supercell indices to cell+atom indices.
@@ -207,7 +207,6 @@ cdef class SymmetryOperations:
       cdef int i,j,k
       cdef double[:] tmp1d
       cdef double[:,:] tmp2d
-      cdef double[:,:,:] rot
       cdef cthirdorder_core.SpglibDataset *data
       data=cthirdorder_core.spg_get_dataset(self.c_lattvec,
                                             self.c_positions,
@@ -235,13 +234,13 @@ cdef class SymmetryOperations:
               self.__translations[i,j]=data.translations[i][j]
               for k in xrange(3):
                   self.__rotations[i,j,k]=data.rotations[i][j][k]
-      rot=np.transpose(self.__rotations,(0,2,1))
       self.__crotations=np.empty_like(self.__rotations)
       self.__ctranslations=np.empty_like(self.__translations)
       for i in xrange(self.nsyms):
-          tmp2d=np.dot(sp.linalg.solve(self.__lattvec,rot[i,:,:]),
-                       self.__lattvec)
-          self.__crotations[i,:,:]=tmp2d.T
+          tmp2d=np.dot(self.__lattvec,
+                       np.dot(self.__rotations[i,:,:],
+                              sp.linalg.inv(self.__lattvec)))
+          self.__crotations[i,:,:]=tmp2d
           tmp1d=np.dot(self.__lattvec,self.__translations[i,:])
           self.__ctranslations[i,:]=tmp1d
       cthirdorder_core.spg_free_dataset(data)
@@ -283,8 +282,8 @@ cdef class SymmetryOperations:
               vr_out[jj,ii]+=self.__ctranslations[ii,jj]
       return r_out
 
-  @cython.boundscheck(False)
-  @cython.wraparound(False)
+  #@cython.boundscheck(False)
+  #@cython.wraparound(False)
   cdef map_supercell(self,dict sposcar):
       """
       Each symmetry operation defines an atomic permutation in a supercell. This method
@@ -340,10 +339,13 @@ cdef class SymmetryOperations:
                   if diff<1e-4:
                       v_nruter[isym,i]=_ind2id(vec,ii,ngrid,natoms)
                       break
+              else:
+                  sys.exit("Error: equivalent atom not found for isym={}, atom={}"
+                           .format(isym,i))
       return nruter
 
 
-@cython.boundscheck(False)
+#@cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     """
     Recover the full anharmonic IFC set from the irreducible set of
@@ -563,8 +565,8 @@ cdef class Wedge:
             self.allallocsize<<=1
             self.alllist=np.concatenate((self.alllist,self.alllist),axis=-1)
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
+    #@cython.boundscheck(False)
+    #@cython.wraparound(False)
     cdef _reduce(self):
         """
         C-level method that performs most of the actual work.
@@ -849,9 +851,9 @@ cdef class Wedge:
 
 
 DEF EPS=1e-10
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.cdivision(True)
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
+#@cython.cdivision(True)
 cdef tuple gaussian(double[:,:] a):
     """
     Specialized version of Gaussian elimination.
