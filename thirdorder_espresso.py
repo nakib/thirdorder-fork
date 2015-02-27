@@ -366,7 +366,7 @@ def gen_supercell(poscar,na,nb,nc):
     return nruter
 
 
-def write_supercell(templatefile,poscar,filename):
+def write_supercell(templatefile,poscar,filename,number):
     """
     Create a Quantum Espresso input file for a supercell calculation
     from a template.
@@ -473,7 +473,7 @@ if __name__=="__main__":
         print "Writing undisplaced coordinates to BASE.{0}".format(
             os.path.basename(sfilename))
         write_supercell(sfilename,sposcar,"BASE.{0}".format(
-                os.path.basename(sfilename)))
+                os.path.basename(sfilename)),0)
         width=len(str(4*(len(list4)+1)))
         namepattern="DISP.{0}.{{0:0{1}d}}".format(os.path.basename(sfilename),
                                                 width)
@@ -490,7 +490,7 @@ if __name__=="__main__":
                                         e[1],e[3],isign*H,
                                         e[0],e[2],jsign*H)
                 filename=namepattern.format(number)
-                write_supercell(sfilename,dsposcar,filename)
+                write_supercell(sfilename,dsposcar,filename,number)
     else:
         print reapblock
         print "Waiting for a list of QE output files on stdin"
