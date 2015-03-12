@@ -1,4 +1,0 @@
-export FC=gfortran
-export FFLAGS=-g -O2 -fPIC  -fbounds-check
-export CFLAGS=-I/home/user/local/include
-export LDFLAGS=-L/home/user/local/lib -llapack -lgfortran
