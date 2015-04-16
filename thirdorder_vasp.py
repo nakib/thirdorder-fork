@@ -52,7 +52,7 @@ def read_POSCAR(directory):
     with dir_context(directory):
         nruter=dict()
         nruter["lattvec"]=np.empty((3,3))
-        f=open(os.path.join(directory,"POSCAR"),"r")
+        f=open("POSCAR","r")
         firstline=f.next()
         factor=.1*float(f.next().strip())
         for i in xrange(3):
