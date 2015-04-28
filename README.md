@@ -8,7 +8,7 @@ The purpose of the thirdorder scripts is to help users of [ShengBTE](https://bit
 
 # Compilation #
 
-thirdorder is a set of Python scripts. It was developed using Python 2.7.3, but should work with slightly older versions. In addition to the modules in Python's standard library, the numpy and scipy numerical libraries are required. Moreover, this script relies on a module, thirdorder\_core, which is written in a Cython. Thus, in spite of Python being an interpreted language, a compilation step is needed. Note that in addition to the .pyx source we also distribute the intermediate .c file, so Cython itself is not needed. The only requirements are a C compiler, the Python development package and Atsushi Togo's [spglib](http://spglib.sourceforge.net/).
+thirdorder is a set of Python scripts. It was developed using Python 2.7.3, but should work with slightly older versions. In addition to the modules in Python's standard library, the numpy and scipy numerical libraries are required. Moreover, this script relies on a module, thirdorder\_core, which is written in Cython. Thus, in spite of Python being an interpreted language, a compilation step is needed. Note that in addition to the .pyx source we also distribute the intermediate .c file, so Cython itself is not needed. The only requirements are a C compiler, the Python development package and Atsushi Togo's [spglib](http://spglib.sourceforge.net/).
 
 Compiling can be as easy as running
 
