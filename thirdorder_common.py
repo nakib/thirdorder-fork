@@ -41,7 +41,7 @@ import scipy.spatial
 import scipy.spatial.distance
 
 
-H=2.116709e-3  # Magnitude of the finite displacements, in nm.
+H=1e-3  # Magnitude of the finite displacements, in nm.
 SYMPREC=1e-5 # Tolerance for symmetry search
 
 sowblock="""

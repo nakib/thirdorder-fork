@@ -46,7 +46,7 @@ cimport cthirdorder_core
 
 # Maximum matrix size (rows*cols) for the dense method.
 DEF MAXDENSE=33554432
-    
+
 # Permutations of 3 elements listed in the same order as in the old
 # Fortran code.
 cdef int[:,:] permutations=np.array([
@@ -58,8 +58,8 @@ cdef int[:,:] permutations=np.array([
     [2,0,1]],dtype=np.intc)
 
 
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline int _ind2id(int[:] icell,int ispecies,int[:] ngrid,int nspecies):
     """
     Merge a set of cell+atom indices into a single index into a supercell.
@@ -67,8 +67,8 @@ cdef inline int _ind2id(int[:] icell,int ispecies,int[:] ngrid,int nspecies):
     return (icell[0]+(icell[1]+icell[2]*ngrid[1])*ngrid[0])*nspecies+ispecies
 
 
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
     """
     Return True if triplet is found in llist[:,:nlist]. The first dimension
@@ -86,8 +86,8 @@ cdef inline bint _triplet_in_list(int[:] triplet,int[:,:] llist,int nlist):
     return False
 
 
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
     """
     Return True if two triplets are equal and False otherwise.
@@ -100,8 +100,8 @@ cdef inline bint _triplets_are_equal(int[:] triplet1,int[:] triplet2):
     return True
 
 
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef tuple _id2ind(int[:] ngrid,int nspecies):
     """
     Create a map from supercell indices to cell+atom indices.
@@ -282,8 +282,8 @@ cdef class SymmetryOperations:
               vr_out[jj,ii]+=self.__ctranslations[ii,jj]
       return r_out
 
-  #@cython.boundscheck(False)
-  #@cython.wraparound(False)
+  @cython.boundscheck(False)
+  @cython.wraparound(False)
   cdef map_supercell(self,dict sposcar):
       """
       Each symmetry operation defines an atomic permutation in a supercell. This method
@@ -345,7 +345,7 @@ cdef class SymmetryOperations:
       return nruter
 
 
-#@cython.boundscheck(False)
+@cython.boundscheck(False)
 def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     """
     Recover the full anharmonic IFC set from the irreducible set of
@@ -368,7 +368,8 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     ntot=len(sposcar["types"])
     vnruter=np.zeros((3,3,3,natoms,ntot,ntot),dtype=np.double)
     naccumindependent=np.insert(np.cumsum(
-        wedge.nindependentbasis[:nlist],dtype=np.intc),0,[0])
+        wedge.nindependentbasis[:nlist],dtype=np.intc),0,
+        np.zeros(1,dtype=np.intc))
     ntotalindependent=naccumindependent[-1]
     vphipart=phipart
     nlist4=len(list4)
@@ -477,7 +478,6 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     return vnruter
 
 
-#### Experimental section: Cython replacements of old Fortran functions.
 cdef class Wedge:
     """
     Objects of this class allow the user to extract irreducible sets
@@ -565,8 +565,8 @@ cdef class Wedge:
             self.allallocsize<<=1
             self.alllist=np.concatenate((self.alllist,self.alllist),axis=-1)
 
-    #@cython.boundscheck(False)
-    #@cython.wraparound(False)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cdef _reduce(self):
         """
         C-level method that performs most of the actual work.
@@ -623,7 +623,7 @@ cdef class Wedge:
         v_independentbasis=self.independentbasis
         v_llist=self.llist
         v_alllist=self.alllist
-        
+
         iaux=0
         shifts27=np.empty((27,3),dtype=np.intc)
         for ii in xrange(-1,2):
@@ -677,8 +677,8 @@ cdef class Wedge:
                         if fabs(rot2[iperm,isym,indexijkprime,indexijk])>1e-12:
                             nonzero[iperm,isym,indexijkprime]=1
                         else:
-                            rot2[iperm,isym,indexijkprime,indexijk]=0.        
-        
+                            rot2[iperm,isym,indexijkprime,indexijk]=0.
+
         # Scan all atom triplets (ii,jj,kk) in the supercell.
         for ii in xrange(natoms):
             for jj in xrange(ntot):
@@ -851,9 +851,9 @@ cdef class Wedge:
 
 
 DEF EPS=1e-10
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
-#@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
 cdef tuple gaussian(double[:,:] a):
     """
     Specialized version of Gaussian elimination.

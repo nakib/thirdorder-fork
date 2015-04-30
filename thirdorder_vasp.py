@@ -52,7 +52,7 @@ def read_POSCAR(directory):
     with dir_context(directory):
         nruter=dict()
         nruter["lattvec"]=np.empty((3,3))
-        f=open(os.path.join(directory,"POSCAR"),"r")
+        f=open("POSCAR","r")
         firstline=f.next()
         factor=.1*float(f.next().strip())
         for i in xrange(3):
@@ -94,7 +94,7 @@ def write_POSCAR(poscar,filename):
     """
     global hashes
     f=StringIO.StringIO()
-    f.write("1.0\n".format(filename))
+    f.write("1.0\n")
     for i in xrange(3):
         f.write("{0[0]:>20.15f} {0[1]:>20.15f} {0[2]:>20.15f}\n".format(
             (poscar["lattvec"][:,i]*10.).tolist()))
