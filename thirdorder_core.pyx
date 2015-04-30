@@ -46,7 +46,7 @@ cimport cthirdorder_core
 
 # Maximum matrix size (rows*cols) for the dense method.
 DEF MAXDENSE=33554432
-    
+
 # Permutations of 3 elements listed in the same order as in the old
 # Fortran code.
 cdef int[:,:] permutations=np.array([
@@ -478,7 +478,6 @@ def reconstruct_ifcs(phipart,wedge,list4,poscar,sposcar):
     return vnruter
 
 
-#### Experimental section: Cython replacements of old Fortran functions.
 cdef class Wedge:
     """
     Objects of this class allow the user to extract irreducible sets
@@ -624,7 +623,7 @@ cdef class Wedge:
         v_independentbasis=self.independentbasis
         v_llist=self.llist
         v_alllist=self.alllist
-        
+
         iaux=0
         shifts27=np.empty((27,3),dtype=np.intc)
         for ii in xrange(-1,2):
@@ -678,8 +677,8 @@ cdef class Wedge:
                         if fabs(rot2[iperm,isym,indexijkprime,indexijk])>1e-12:
                             nonzero[iperm,isym,indexijkprime]=1
                         else:
-                            rot2[iperm,isym,indexijkprime,indexijk]=0.        
-        
+                            rot2[iperm,isym,indexijkprime,indexijk]=0.
+
         # Scan all atom triplets (ii,jj,kk) in the supercell.
         for ii in xrange(natoms):
             for jj in xrange(ntot):
