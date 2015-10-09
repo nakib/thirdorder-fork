@@ -400,6 +400,8 @@ def read_forces(filename):
             fields=l.split()
             if len(fields)==9 and fields[0]=="atom" and fields[4]=="force":
                 nruter.append([float(i) for i in fields[6:]])
+            elif fields[-3:]==["contrib.", "to", "forces"]:
+                break
     nruter=np.array(nruter)*RYDBERG/BOHR_RADIUS
     return nruter
 
