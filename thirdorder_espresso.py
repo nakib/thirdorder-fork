@@ -236,9 +236,9 @@ def read_qe_in(filename):
     celldmre = re.compile(
         r"celldm\((?P<number>\d)\)\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",
         re.MULTILINE)
-    tagre=lambda keyword:re.compile(
-        re.escape(keyword)+
-        r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",re.MULTILINE)
+    tagre = lambda keyword:re.compile(
+        re.escape(keyword) +
+        r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])", re.MULTILINE)
     kindre = re.compile(r"\S+\s+[\{\(\s]*(?P<kind>\w+)[\}\)\s]*")
     contents = open(filename, "r").read()
     try:
@@ -414,6 +414,8 @@ def read_forces(filename):
             if len(fields
                    ) == 9 and fields[0] == "atom" and fields[4] == "force":
                 nruter.append([float(i) for i in fields[6:]])
+            elif fields[-3:] == ["contrib.", "to", "forces"]:
+                break
     nruter = np.array(nruter) * RYDBERG / BOHR_RADIUS
     return nruter
 
