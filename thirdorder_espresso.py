@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #  thirdorder, help compute anharmonic IFCs from minimal sets of displacements
-#  Copyright (C) 2012-2014 Wu Li <wu.li.phys2011@gmail.com>
-#  Copyright (C) 2012-2014 Jesús Carrete Montaña <jcarrete@gmail.com>
-#  Copyright (C) 2012-2014 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
-#  Copyright (C) 2014      Antti J. Karttunen <antti.j.karttunen@iki.fi>
+#  Copyright (C) 2012-2018 Wu Li <wu.li.phys2011@gmail.com>
+#  Copyright (C) 2012-2018 Jesús Carrete Montaña <jcarrete@gmail.com>
+#  Copyright (C) 2012-2018 Natalio Mingo Bisquert <natalio.mingo@cea.fr>
+#  Copyright (C) 2014-2018 Antti J. Karttunen <antti.j.karttunen@iki.fi>
+#  Copyright (C) 2016-2018 Genadi Naydenov <gan503@york.ac.uk>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
