@@ -1,8 +1,8 @@
 # thirdorder #
 
-The purpose of the thirdorder scripts is to help users of [ShengBTE](https://bitbucket.org/sousaw/shengbte) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks:
+The purpose of the thirdorder scripts is to help users of [ShengBTE](https://bitbucket.org/sousaw/shengbte) and [almaBTE](http://www.almabte.eu) create FORCE\_CONSTANTS\_3RD files in an efficient and convenient manner. More specifically, it performs two tasks:
 
-1) It resolves an irreducible set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. The displaced supercells are saved to input files that can be fed to first-principles DFT codes for calculating the forces arising from the atomic displacements. Currently supported DFT codes are VASP (thirdorder_vasp.py) and Quantum ESPRESSO (thirdorder_espresso.py)
+1) It resolves an irreducible set of atomic displacements from which to compute the full anharmonic interatomic force constant (IFC) matrix. The displaced supercells are saved to input files that can be fed to first-principles DFT codes for calculating the forces arising from the atomic displacements. Currently supported DFT codes are VASP (thirdorder_vasp.py), Quantum ESPRESSO (thirdorder_espresso.py). and CASTEP (thirdorder_castep.py).
 
 2) From the output files created by the DFT code, thirdorder reconstructs the full IFC matrix and writes it in the right format to FORCE\_CONSTANTS\_3RD.
 
