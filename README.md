@@ -179,47 +179,90 @@ If everything goes according to plan, a FORCE_CONSTANTS_3RD file will be created
 
 # Running thirdorder with CASTEP #
 
-### SOW mode:
- 	Input files: <seedname>.cell, <seedname>.param
+Any invocation of thirdorder_castep.py requires a CELL and PARAM file with a description of the unit cell and parameters to be present in the current directory. The script uses no other configuration files, and takes 
+exactly six mandatory command-line arguments:
 
-	Output files: <seedname>-3RD directory, which countains multiple job-<number> subdirectories. 
-       	Each subdirectory contains a supercell <seedname>.cell file with a small perturbation and a copy of the <seedname>.param file.
+```bash
+thirdorder_castep.py sow|reap na nb nc cutoff[nm/-integer] <seedname>
+```
 
-	command: `thirdorder_castep.py sow nx ny nz cutoff seedname` 
- 	Example: `thirdorder_castep.py sow 1 1 1 -3 InAs`
+The first argument must be either "sow" or "reap", and chooses the operation to be performed (displacement generation or irreducible force constant (IFC) matrix reconstruction). The next three must be positive integers, 
+and specify the dimensions of the supercell to be created. The "cutoff" parameter specifies the force cutoff distance in nanometres; interactions between atoms further apart than this parameter are neglected. If cutoff is 
+a negative integer -n, the cutoff is set automatically to the maximum distance of the n-th nearest neighbours in the supercell, e.g. if it is set to -3, the 3rd nearest-neighbour distances will be computed, and the cutoff set to the
+ largest value. Finally, <seedname> is the file prefix for CASTEP's input/output files.
 
-It is necessary to complete all jobs in `<seedname>`-3RD directory before proceeding to REAP mode. 
+The following CELL file describes the relaxed geometry of the primitive unit cell of InAs, a III-V semiconductor with a zincblende structure:
 
-### REAP mode:
-	Input files: <seedname>.castep (thirdorder_castep.py goes through all subdirectories in <seedname>-3RD and collects forces data.)
- 
-	Output file: FORCE_CONSTANTS_3RD
+```
+%BLOCK LATTICE_CART
+     0.000000000000000    3.015881337714003    3.015881337714003
+     3.015881337714003    0.000000000000000    3.015881337714003
+     3.015881337714003    3.015881337714003    3.015881337714003
+%ENDBLOCK LATTICE_CART
 
-	command: `find <seedname>-3RD/job* -name <seedname>.castep | sort -n| thirdorder_castep.py reap nx ny nz cutoff seedname`
- 	Example: `find InAs-3RD/job* -name InAs.castep | sort -n| thirdorder_castep.py reap 1 1 1 -3 seedname`
+%BLOCK POSITIONS_FRAC
+In  0.0000000000000000  0.0000000000000000  0.0000000000000000
+As  0.2500000000000000  0.2500000000000000  0.2500000000000000
+%ENDBLOCK POSITIONS_FRAC
 
-Use FORCE_CONSTANTS_3RD file along with FORCE_CONSTANTS_2ND and CONTROL to perform a ShengBTE run.
+symmetry_generate
+kpoints_mp_grid 5 5 5
+```
 
-### LIMITATIONS: 
-- It is not possible to do spin polarised calculations because spin will not be included in the supercell files.
+Let us assume that such a CELL file is in the current directory along with an appropriate PARAM file, and that thirdorder_castep.py is in our PATH. To generate an irreducible set of displacements for a 4x4x4 supercell and 
+up to third-nearest-neighbour interactions, we run:
 
-- Initial <seedname>.cell file MUST be in the following format:
+```bash
+thirdorder_castep.py sow 4 4 4 -3 InAs
+```
+
+This creates an InAs-3RD directory (`<seedname>`-3RD in the general case) with the undisplaced supercell coordinates and 144 subdirectories with names following the pattern job-*, which contain supercells with small perturbations 
+to the atomic positions. Each job is a separate calculation which needs to be input to CASTEP. This step is completely system-dependent. As an example, on a given system the user could run the jobs in series with a command sequence like:
+
+```bash
+for i in {000..144}
+do
+ cd InAs-3RD/job-$i
+ aprun -n ${n} castep.mpi InAs
+ cd -
+ echo "job-$i done" >> jobs_done.txt
+done
+```
+
+It is necessary to complete all jobs in `<seedname>`-3RD directory before proceeding to the REAP step. After the jobs have completed successfully, the output files have to be collated and passed to thirdorder_castep.py, this 
+time in REAP mode. The general syntax is:
+
+```bash
+find <seedname>-3RD/job* -name <seedname>.castep | sort -n| thirdorder_castep.py reap nx ny nz cutoff seedname
+```
+
+For the InAs example, this would be:
+
+```bash
+find InAs-3RD/job* -name InAs.castep | sort -n| thirdorder_castep.py reap 4 4 4 -3 InAs
+```
+
+If everything goes well, a FORCE\_CONSTANTS\_3RD file will be created at the end of this run. Naturally, it is important to choose the same parameters (nx, ny, nz, cutoff) for the sow and reap steps. Use this 
+FORCE\_CONSTANTS\_3RD file along with FORCE\_CONSTANTS\_2ND and CONTROL to perform a ShengBTE run. The [CASTEP2ShengBTE script](https://github.com/ganphys/castep2shengbte) can be useful for generating FORCE\_CONSTANTS\_2ND and CONTROL files from CASTEP calculations.
+
+### Limitations of the CASTEP interface: 
+- Spin-polarised calculations are not supported at the moment. Spin values will not be included in the supercell files.
+- The initial <seedname>.cell file MUST be in the following format:
 	  Lattice parameter, Cell contents AND THEN everything else.
-- Absolute coordinates are not supported.
+- Only fractional coordinates are supported. Use only fractional coordinates.
 
-### Useful tips
+### Hints and tips for CASTEP calculations:
 
-- Use `write_checkpoint: none` in the `<seedname>`.param file. Otherwise, the process of writing hunderds of checkpoint files to the hard drive will slow down the calculation process.
+- Use `write_checkpoint: none` in the `<seedname>`.param file. Otherwise, the process of writing hundreds of checkpoint files to the hard drive will slow down the calculation process.
  
-- It is possible to reuse a single checkpoint file for each of the runs. This should save you a couple of hours. For that purpose generate a checkpoint file from one of the runs and place the file in the root directory where your input files are placed. Then add `reuse : ../../seedname.check` to your `<seedname>`.param file in the root directory and either run once again thirdorder_castep.py in SOW mode paste the edited `<seedname>`.param file to all subdirectories or copy and paste it manually.
+- It is possible to reuse a single checkpoint file for each of the runs. This should save you a couple of hours. For that purpose, generate a checkpoint file from one of the runs and place the file in the root directory where your input files are placed. Then add `reuse : ../../seedname.check` to your `<seedname>`.param file in the root directory and either run once again thirdorder_castep.py in SOW mode paste the edited `<seedname>`.param file to all subdirectories or copy and paste it manually.
 
 - If you don't want to generate the pseudopotentials at the start of each run, you can add the following block to the end of the <seedname>.cell in the root directory:
 
 ```
 %BLOCK SPECIES_POT
-Fe ../../Fe_C17_PBE_OTF.usp
-Ta ../../Ta_C17_PBE_OTF.usp
-Sb ../../Sb_C17_PBE_OTF.usp
+In ../../In_C17_PBE_OTF.usp
+As ../../As_C17_PBE_OTF.usp
 %ENDBLOCK SPECIES_POT
 ```
 
