@@ -202,6 +202,12 @@ def eval_qe_algebraic(expression):
     expr = expression.lower().replace("d", "e").replace("^", "**")
 
     # Evaluate the result in a safe manner.
+    if expr.startswith("-"):
+        prefactor = -1
+        expr = expr[1:]
+    else:
+        prefactor = 1.
+
     def eval_node(node):
         """
         Evaluate each node in the expression, recursing down if needed.
@@ -226,7 +232,7 @@ def eval_qe_algebraic(expression):
         else:
             raise ValueError("invalid node in the parse tree")
 
-    return eval_node(ast.parse(expr, mode="eval").body)
+    return prefactor * eval_node(ast.parse(expr, mode="eval").body)
 
 
 def read_qe_in(filename):
