@@ -133,11 +133,11 @@ The following supercell template GaAs_sc.in is used for creating the supercell i
   prefix='gaas',
   tstress = .true.,
   tprnfor = .true.,
-  outdir = 'tmp_\#\#NUMBER\#\#'
+  outdir = 'tmp_##NUMBER##'
 /
 &SYSTEM
   ibrav=0,
-  nat=\#\#NATOMS\#\#,
+  nat=##NATOMS##,
   ntyp=2,
   ecutwfc=48
   ecutrho=384
@@ -148,9 +148,9 @@ The following supercell template GaAs_sc.in is used for creating the supercell i
 ATOMIC_SPECIES
  As  74.92160  As.pbe-dn-kjpaw_psl.1.0.0.UPF
  Ga  69.723    Ga.pbe-dnl-kjpaw_psl.1.0.0.UPF
-\#\#COORDINATES\#\#
+##COORDINATES##
 K_POINTS gamma
-\#\#CELL\#\#
+##CELL##
 ```
 
 Please note that if Gamma-point k-sampling is used for the supercells, it is computationally much more efficient to apply "K_POINTS gamma" instead of "K_POINTS automatic" with the mesh set to "1 1 1 0 0 0". SCF convergence criterion conv_thr should be set to a tight value and parameters tstress and tprnfor are required so that thirdorder can extract the forces from the output file.
