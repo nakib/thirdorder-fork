@@ -98,13 +98,13 @@ def qe_cell(ibrav, celldm):
     elif ibrav == 7:
         nruter[0, 0] = 0.5
         nruter[0, 1] = -0.5
-        nruter[0, 2] = celldm[3]
+        nruter[0, 2] = celldm[3] / 2.
         nruter[1, 0] = 0.5
         nruter[1, 1] = 0.5
-        nruter[1, 2] = celldm[3]
+        nruter[1, 2] = celldm[3] / 2.
         nruter[2, 0] = -0.5
         nruter[2, 1] = -0.5
-        nruter[2, 2] = celldm[3]
+        nruter[2, 2] = celldm[3] / 2.
     elif ibrav == 8:
         nruter[0, 0] = 1.0
         nruter[0, 1] = 0.0
@@ -173,8 +173,9 @@ def qe_cell(ibrav, celldm):
         nruter[1, 1] = celldm[2] * np.sin(np.arccos(celldm[6]))
         nruter[1, 2] = 0.
         nruter[2, 0] = celldm[3] * celldm[5]
-        nruter[2, 1] = celldm[3] * (
-            celldm[4] - celldm[5] * celldm[6]) / np.sin(np.arccos(celldm[6]))
+        nruter[2,
+               1] = celldm[3] * (celldm[4] - celldm[5] * celldm[6]) / np.sin(
+                   np.arccos(celldm[6]))
         nruter[2, 2] = celldm[3] * np.sqrt(
             1 + 2 * celldm[4] * celldm[5] * celldm[6] - celldm[4]**2 -
             celldm[5]**2 - celldm[6]**2) / np.sin(np.arccos(celldm[6]))
@@ -243,9 +244,9 @@ def read_qe_in(filename):
     celldmre = re.compile(
         r"celldm\((?P<number>\d)\)\s*=\s*(?P<value>\S+?)(?:$|[,!\s])",
         re.MULTILINE)
-    tagre = lambda keyword:re.compile(
-        re.escape(keyword) +
-        r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])", re.MULTILINE)
+    tagre = lambda keyword: re.compile(
+        re.escape(keyword) + r"\s*=\s*(?P<value>\S+?)(?:$|[,!\s])", re.
+        MULTILINE)
     kindre = re.compile(r"\S+\s+[\{\(\s]*(?P<kind>\w+)[\}\)\s]*")
     contents = open(filename, "r").read()
     try:
@@ -297,14 +298,14 @@ def read_qe_in(filename):
                 raise ValueError("Type of ATOMIC_POSITIONS missing")
             if poskind not in ("alat", "bohr", "angstrom", "crystal"):
                 raise ValueError(
-                    "cannot interpret coordinates in \"{0}\" format"
-                    .format(poskind))
+                    "cannot interpret coordinates in \"{0}\" format".format(
+                        poskind))
             reading = True
     # Sanity check
     if read < natoms:
         raise ValueError(
-            "Proper ATOMIC_POSITIONS not found (expected: {0}; found: {1})"
-            .format(natoms, read))
+            "Proper ATOMIC_POSITIONS not found (expected: {0}; found: {1})".
+            format(natoms, read))
     # Read CELL_PARAMETERS if ibrav == 0
     reading = False
     read = 0
@@ -330,8 +331,8 @@ def read_qe_in(filename):
                     raise ValueError("Type of CELL_PARAMETERS missing")
                 if latkind not in ("alat", "bohr", "angstrom"):
                     raise ValueError(
-                        "cannot interpret cell parameters in \"{0}\" format"
-                        .format(latkind))
+                        "cannot interpret cell parameters in \"{0}\" format".
+                        format(latkind))
                 if latkind == "alat" and len(celldm) == 0:
                     raise ValueError("CELL_PARAMETERS alat requires celldm(1)")
                 reading = True
@@ -374,11 +375,10 @@ def gen_supercell(poscar, na, nb, nc):
         (3, poscar["positions"].shape[1] * na * nb * nc))
     pos = 0
     for pos, (k, j, i, iat) in enumerate(
-            itertools.product(
-                xrange(nc),
-                xrange(nb), xrange(na), xrange(poscar["positions"].shape[1]))):
-        nruter["positions"][:, pos] = (
-            poscar["positions"][:, iat] + [i, j, k]) / [na, nb, nc]
+            itertools.product(xrange(nc), xrange(nb), xrange(na),
+                              xrange(poscar["positions"].shape[1]))):
+        nruter["positions"][:, pos] = (poscar["positions"][:, iat] +
+                                       [i, j, k]) / [na, nb, nc]
         nruter["elements"].append(poscar["elements"][iat])
         nruter["types"].append(poscar["types"][iat])
     return nruter
@@ -435,8 +435,8 @@ if __name__ == "__main__":
         """
         sys.exit("""Usage:
 \t{program:s} unitcell.in sow na nb nc cutoff[nm/-integer] supercell_template.in
-\t{program:s} unitcell.in reap na nb nc cutoff[nm/-integer]"""
-                 .format(program=sys.argv[0]))
+\t{program:s} unitcell.in reap na nb nc cutoff[nm/-integer]""".format(
+            program=sys.argv[0]))
 
     if len(sys.argv) not in (7, 8) or sys.argv[2] not in ("sow", "reap"):
         usage()
@@ -471,8 +471,9 @@ if __name__ == "__main__":
     poscar = read_qe_in(ufilename)
     natoms = len(poscar["types"])
     print("Analyzing symmetries")
-    symops = thirdorder_core.SymmetryOperations(
-        poscar["lattvec"], poscar["types"], poscar["positions"].T, SYMPREC)
+    symops = thirdorder_core.SymmetryOperations(poscar["lattvec"],
+                                                poscar["types"],
+                                                poscar["positions"].T, SYMPREC)
     print("- Symmetry group {0} detected".format(symops.symbol))
     print("- {0} symmetry operations".format(symops.translations.shape[0]))
     print("Creating the supercell")
