@@ -7,10 +7,12 @@ from distutils.extension import Extension
 
 # Add the location of the "spglib/spglib.h" to this list if necessary.
 # Example: INCLUDE_DIRS=["/home/user/local/include"]
-INCLUDE_DIRS = []
+INCLUDE_DIRS = ["/users/sol/nakib/spglib/build/include"]
+#INCLUDE_DIRS = []
 # Add the location of the spglib shared library to this list if necessary.
 # Example: LIBRARY_DIRS=["/home/user/local/lib"]
-LIBRARY_DIRS = []
+LIBRARY_DIRS=["/users/sol/nakib/spglib/build/lib"]
+#LIBRARY_DIRS=[]
 
 # Set USE_CYTHON to True if you want include the cythonization in your build
 # process.
