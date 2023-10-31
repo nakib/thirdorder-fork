@@ -63,10 +63,10 @@ def read_exciting_input(directory):
 
     print('Parsing exciting input.xml...')
     
-    crystal_info = dict()
-        
+    unitcell_info = dict()
+    
     with dir_context(directory):
-        crystal_info['lattvec'] = np.empty((3, 3))
+        unitcell_info['lattvec'] = np.empty((3, 3))
         
         tree = ElementTree.parse('input.xml')
         root = tree.getroot()
@@ -74,22 +74,140 @@ def read_exciting_input(directory):
         for structure in root.iter('structure'):
             lattvecs = []
             for crystal in structure.findall('crystal'):
-                scale = float(crystal.attrib['scale'])
+                #The 0.1 is for Ang -> nm conversion
+                scale = float(crystal.attrib['scale'])*0.1
                 for basevect in crystal.findall('basevect'):
                     lattvecs.append([scale*float(a) for a in basevect.text.split()])
 
-                crystal_info['lattvec'] = lattvecs
+                for dim in range(3):
+                    unitcell_info['lattvec'][:, dim] = lattvecs[dim]
 
             elements = []
+            unique_elements = []
+            basis = []
+            types = []
+            numatoms = 0
+            numspecies = 0
             for species in structure.findall('species'):
-                elements.append(species.attrib['speciesfile'].split(".")[0])
+                element = species.attrib['speciesfile'].split(".")[0]
+                unique_elements.append(element)
+                numspecies += 1
+                for atom in species.findall('atom'):
+                    numatoms += 1
+                    basis.append([float(a) for a in atom.attrib['coord'].split()])
+                    elements.append(element)
+                    types.append(numspecies)
 
-            crystal_info['elements'] = elements
+            unitcell_info['elements'] = elements
+            unitcell_info['unique_elements'] = unique_elements
+            unitcell_info['positions'] = np.empty((3, numatoms))
+            for a in range(numatoms):
+                unitcell_info['positions'][:, a] = basis[a]
+            print(unitcell_info['positions'])
+            unitcell_info['types'] = types
 
-        print('Lattice vectors: ' + str(crystal_info['lattvec']) + ' Bohr')
-        print('Elements: ' + str(crystal_info['elements']))
+        print('Lattice vectors: ' + str(unitcell_info['lattvec']) + ' nm')
+        #print('Elements: ' + str(unitcell_info['elements']))
+        print('Unique elements: ' + str(unitcell_info['unique_elements']))
+        print('Number of atoms = ' + str(numatoms))
+        print('Basis vectors = ' + str(unitcell_info['positions'].T))
+        print('Atom types = ' + str(unitcell_info['types']))
 
-    return crystal_info
-            
+    return unitcell_info
+
+
+def gen_supercell(unitcell_info, na, nb, nc):
+    """
+    Create a dictionary similar to the first argument but describing a
+    supercell.
+    """
+    nruter = dict()
+    nruter["na"] = na
+    nruter["nb"] = nb
+    nruter["nc"] = nc
+    nruter["lattvec"] = np.array(unitcell_info["lattvec"])
+    nruter["lattvec"][:, 0] *= na
+    nruter["lattvec"][:, 1] *= nb
+    nruter["lattvec"][:, 2] *= nc
+    nruter["elements"] = []
+    nruter["types"] = []
+    nruter["positions"] = np.empty(
+        (3, unitcell_info["positions"].shape[1] * na * nb * nc))
+    pos = 0
+    for pos, (k, j, i, iat) in enumerate(
+            itertools.product(xrange(nc), xrange(nb), xrange(na),
+                              xrange(unitcell_info["positions"].shape[1]))):
+        nruter["positions"][:, pos] = (unitcell_info["positions"][:, iat] +
+                                       [i, j, k]) / [na, nb, nc]
+        nruter["elements"].append(unitcell_info["elements"][iat])
+        nruter["types"].append(unitcell_info["types"][iat])
+    return nruter
+
+
+def write_supercell(templatefile, supercell, filename, number):
+    """
+    Create an exciting input file for a supercell calculation
+    from a template.
+    """
+    text = open(templatefile, "r").read()
+    
+    for i in ("##CELL##"):
+        if i not in text:
+            raise ValueError(
+                "the template does not contain a {0} tag".format(i))
+
+    celltext = "<crystal scale=\"1.0000\">\n" + "\n".join([
+        " ".join(["{0:>20.15g}".format(10. * i) for i in j])
+        for j in supercell["lattvec"].T.tolist()
+        ]) + "\n</crystal>"
+
+    text = text.replace("##CELL##", celltext)
+        
+    open(filename, "w").write(text)
+
+
 if __name__ == '__main__':
-    read_exciting_input('./')
+
+    #test
+    na = 4
+    nb = 4
+    nc = 4
+    nneigh = 2
+    action = "sow"
+    sfilename = "sc_input.xml"
+    ##
+    
+    print('Reading input.xml')
+    unitcell_info = read_exciting_input('./')
+    natoms = len(unitcell_info['types'])
+    print('Analyzing the symmetries')
+    symops = thirdorder_core.SymmetryOperations(
+        unitcell_info["lattvec"], unitcell_info["types"], unitcell_info["positions"].T, SYMPREC)
+    print("- Symmetry group {0} detected".format(symops.symbol))
+    print("- {0} symmetry operations".format(symops.translations.shape[0]))
+    print("Creating the supercell")
+    
+    supercell = gen_supercell(unitcell_info, na, nb, nc)
+    ntot = natoms * na * nb * nc
+    print("Computing all distances in the supercell")
+    dmin, nequi, shifts = calc_dists(supercell)
+    if nneigh != None:
+        frange = calc_frange(unitcell_info, supercell, nneigh, dmin)
+        print("- Automatic cutoff: {0} nm".format(frange))
+    else:
+        print("- User-defined cutoff: {0} nm".format(frange))
+    print("Looking for an irreducible set of third-order IFCs")
+    wedge = thirdorder_core.Wedge(unitcell_info, supercell, symops, dmin, nequi, shifts,
+                                  frange)
+    print("- {0} triplet equivalence classes found".format(wedge.nlist))
+    list4 = wedge.build_list4()
+    nirred = len(list4)
+    nruns = 4 * nirred
+    print("- {0} DFT runs are needed".format(nruns))
+
+    if action == "sow":
+        print(sowblock)
+        print("Writing undisplaced coordinates to BASE.{0}".format(
+            os.path.basename(sfilename)))
+        write_supercell(sfilename, supercell,
+                        "BASE.{0}".format(os.path.basename(sfilename)), 0)
