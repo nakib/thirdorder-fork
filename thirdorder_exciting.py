@@ -149,29 +149,29 @@ def write_supercell(templatefile, supercell, filename, number):
     Create an exciting input file for a supercell calculation
     from a template.
     """
-    text = open(templatefile, "r").read()
-    
-    for i in ("##CELL##"):
-        if i not in text:
-            raise ValueError(
-                "the template does not contain a {0} tag".format(i))
 
-    celltext = "<crystal scale=\"1.0000\">\n" + "\n".join([
-        " ".join(["{0:>20.15g}".format(10. * i) for i in j])
-        for j in supercell["lattvec"].T.tolist()
-        ]) + "\n</crystal>"
+    tree = ElementTree.parse(templatefile)
+    root = tree.getroot()
 
-    text = text.replace("##CELL##", celltext)
-        
-    open(filename, "w").write(text)
+    for structure in root.iter('structure'):
+        for crystal in structure.findall('crystal'):
+            crystal.attrib['scale'] = "1.0000"
+            #Remove existing unitcell lattice vectors
+            for basevect in crystal.findall('basevect'):
+                crystal.remove(basevect)
+            #Add supercell basis bectors
+            for i in range(3):
+                ElementTree.SubElement(crystal, 'basevect').text = \
+                    '    '.join(map(str, supercell["lattvec"][:, i]))
 
+    tree.write('test_output.xml')
 
 if __name__ == '__main__':
 
     #test
-    na = 4
-    nb = 4
-    nc = 4
+    na = 2
+    nb = 2
+    nc = 2
     nneigh = 2
     action = "sow"
     sfilename = "sc_input.xml"
